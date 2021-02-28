@@ -63,6 +63,7 @@
 #include "sound.h"
 #include "sysload.h"
 #include "estimator_kalman.h"
+#include "errorEstimator_kalman.h"
 #include "deck.h"
 #include "extrx.h"
 #include "app.h"
@@ -182,6 +183,7 @@ void systemTask(void *arg)
 
   StateEstimatorType estimator = anyEstimator;
   estimatorKalmanTaskInit();
+  errorEstimatorKalmanTaskInit();
   deckInit();
   estimator = deckGetRequiredEstimator();
   stabilizerInit(estimator);
@@ -203,7 +205,12 @@ void systemTask(void *arg)
   pass &= commTest();
   pass &= commanderTest();
   pass &= stabilizerTest();
-  pass &= estimatorKalmanTaskTest();
+  if(estimator == errorStateKalmanFilter){
+	  pass &= errorEstimatorKalmanTaskTest();
+  }
+  else{
+	  pass &= estimatorKalmanTaskTest();
+  }
   pass &= deckTest();
   pass &= soundTest();
   pass &= memTest();

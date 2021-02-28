@@ -581,7 +581,7 @@ static const DeckDriver dwm1000_deck = {
   .name = "bcDWM1000",
 
   .usedGpio = 0,  // FIXME: set the used pins
-  .requiredEstimator = kalmanEstimator,
+  .requiredEstimator = errorStateKalmanFilter,// kalmanEstimator,
   #ifdef LOCODECK_NO_LOW_INTERFERENCE
   .requiredLowInterferenceRadioMode = false,
   #else

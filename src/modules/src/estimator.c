@@ -5,6 +5,7 @@
 #include "estimator.h"
 #include "estimator_complementary.h"
 #include "estimator_kalman.h"
+#include "errorEstimator_kalman.h"
 
 #define DEFAULT_ESTIMATOR complementaryEstimator
 static StateEstimatorType currentEstimator = anyEstimator;
@@ -80,6 +81,22 @@ static EstimatorFcns estimatorFunctions[] = {
         .estimatorEnqueueYawError = estimatorKalmanEnqueueYawError,
         .estimatorEnqueueSweepAngles = estimatorKalmanEnqueueSweepAngles,
     },
+	{
+	    .init = errorEstimatorKalmanInit,
+	    .deinit = NOT_IMPLEMENTED,
+	    .test = errorEstimatorKalmanTest,
+	    .update = errorEstimatorKalman,
+	    .name = "Error State Kalman",
+	    .estimatorEnqueueTDOA = errorEstimatorKalmanEnqueueTDOA,
+	    .estimatorEnqueuePosition = NOT_IMPLEMENTED,
+	    .estimatorEnqueuePose = NOT_IMPLEMENTED,
+	    .estimatorEnqueueDistance = NOT_IMPLEMENTED,
+	    .estimatorEnqueueTOF = errorEstimatorKalmanEnqueueTOF,
+	    .estimatorEnqueueAbsoluteHeight = NOT_IMPLEMENTED,
+	    .estimatorEnqueueFlow = errorEstimatorKalmanEnqueueFlow,
+	    .estimatorEnqueueYawError = NOT_IMPLEMENTED,
+	    .estimatorEnqueueSweepAngles = NOT_IMPLEMENTED,
+	},
 };
 
 void stateEstimatorInit(StateEstimatorType estimator) {

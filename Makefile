@@ -175,13 +175,13 @@ PROJ_OBJ += commander.o crtp_commander.o crtp_commander_rpyt.o
 PROJ_OBJ += crtp_commander_generic.o crtp_localization_service.o peer_localization.o
 PROJ_OBJ += attitude_pid_controller.o sensfusion6.o stabilizer.o
 PROJ_OBJ += position_estimator_altitude.o position_controller_pid.o position_controller_indi.o
-PROJ_OBJ += estimator.o estimator_complementary.o
+PROJ_OBJ += estimator.o estimator_complementary.o 
 PROJ_OBJ += controller.o controller_pid.o controller_mellinger.o controller_indi.o
 PROJ_OBJ += power_distribution_$(POWER_DISTRIBUTION).o
 PROJ_OBJ += collision_avoidance.o health.o
 
 # Kalman estimator
-PROJ_OBJ += estimator_kalman.o kalman_core.o kalman_supervisor.o
+PROJ_OBJ += estimator_kalman.o kalman_core.o kalman_supervisor.o errorEstimator_kalman.o
 PROJ_OBJ += mm_distance.o mm_absolute_height.o mm_position.o mm_pose.o mm_tdoa.o mm_flow.o mm_tof.o mm_yaw_error.o mm_sweep_angles.o
 
 # High-Level Commander
