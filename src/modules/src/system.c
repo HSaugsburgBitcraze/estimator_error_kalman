@@ -205,12 +205,12 @@ void systemTask(void *arg)
   pass &= commTest();
   pass &= commanderTest();
   pass &= stabilizerTest();
-  if(estimator == errorStateKalmanFilter){
-	  pass &= errorEstimatorKalmanTaskTest();
-  }
-  else{
-	  pass &= estimatorKalmanTaskTest();
-  }
+  //if(estimator == errorStateKalmanFilter){
+  //	  pass &= errorEstimatorKalmanTaskTest();
+  // }
+  //else{
+  pass &= estimatorKalmanTaskTest();
+  //}
   pass &= deckTest();
   pass &= soundTest();
   pass &= memTest();

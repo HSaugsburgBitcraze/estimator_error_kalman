@@ -200,7 +200,7 @@ static const DeckDriver flowdeck1_deck = {
   .name = "bcFlow",
 
   .usedGpio = 0,  // FIXME: set the used pins
-  .requiredEstimator = errorStateKalmanFilter,//kalmanEstimator,
+  .requiredEstimator = kalmanEstimator, //errorStateKalmanFilter,//
 
   .init = flowdeck1Init,
   .test = flowdeck1Test,
