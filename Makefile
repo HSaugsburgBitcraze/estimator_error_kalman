@@ -79,7 +79,7 @@ ST_OBJ += usb_core.o usb_dcd_int.o usb_dcd.o
 ST_OBJ += usbd_ioreq.o usbd_req.o usbd_core.o
 
 PROCESSOR = -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
-CFLAGS += -fno-math-errno -DARM_MATH_CM4 -D__FPU_PRESENT=1 -D__TARGET_FPU_VFP -mfp16-format=ieee
+CFLAGS += -fno-math-errno -DARM_MATH_CM4 -D__FPU_PRESENT=1 -mfp16-format=ieee
 
 #Flags required by the ST library
 CFLAGS += -DSTM32F4XX -DSTM32F40_41xxx -DHSE_VALUE=8000000 -DUSE_STDPERIPH_DRIVER
@@ -257,11 +257,11 @@ PROJ_OBJ += exptestBolt.o
 
 
 # Utilities
-PROJ_OBJ += filter.o cpuid.o cfassert.o  eprintf.o crc.o num.o debug.o
+PROJ_OBJ += filter.o cpuid.o cfassert.o  eprintf.o crc32.o num.o debug.o
 PROJ_OBJ += version.o FreeRTOS-openocd.o
-PROJ_OBJ += configblockeeprom.o crc_bosch.o
+PROJ_OBJ += configblockeeprom.o
 PROJ_OBJ += sleepus.o statsCnt.o rateSupervisor.o
-PROJ_OBJ += lighthouse_core.o pulse_processor.o pulse_processor_v1.o pulse_processor_v2.o lighthouse_geometry.o ootx_decoder.o lighthouse_calibration.o lighthouse_deck_flasher.o lighthouse_position_est.o
+PROJ_OBJ += lighthouse_core.o pulse_processor.o pulse_processor_v1.o pulse_processor_v2.o lighthouse_geometry.o ootx_decoder.o lighthouse_calibration.o lighthouse_deck_flasher.o lighthouse_position_est.o lighthouse_storage.o
 PROJ_OBJ += kve_storage.o kve.o
 
 ifeq ($(DEBUG_PRINT_ON_SEGGER_RTT), 1)
@@ -284,24 +284,25 @@ SIZE = $(CROSS_COMPILE)size
 OBJCOPY = $(CROSS_COMPILE)objcopy
 GDB = $(CROSS_COMPILE)gdb
 
-INCLUDES += -I$(FREERTOS)/include -I$(PORT) -I$(CRAZYFLIE_BASE)/src
-INCLUDES += -I$(CRAZYFLIE_BASE)/src/config -I$(CRAZYFLIE_BASE)/src/hal/interface
-INCLUDES += -I$(CRAZYFLIE_BASE)/src/modules/interface -I$(CRAZYFLIE_BASE)/src/modules/interface/lighthouse -I$(CRAZYFLIE_BASE)/src/modules/interface/kalman_core
-INCLUDES += -I$(CRAZYFLIE_BASE)/src/utils/interface -I$(CRAZYFLIE_BASE)/src/drivers/interface -I$(CRAZYFLIE_BASE)/src/platform
-INCLUDES += -I$(CRAZYFLIE_BASE)/vendor/CMSIS/CMSIS/Include -I$(CRAZYFLIE_BASE)/src/drivers/bosch/interface
+INCLUDES += -I$(CRAZYFLIE_BASE)/vendor/CMSIS/CMSIS/Core/Include -I$(CRAZYFLIE_BASE)/vendor/CMSIS/CMSIS/DSP/Include
+INCLUDES += -I$(CRAZYFLIE_BASE)/vendor/libdw1000/inc
+INCLUDES += -I$(FREERTOS)/include -I$(PORT)
 
-INCLUDES += -I$(LIB)/STM32F4xx_StdPeriph_Driver/inc
+INCLUDES += -I$(CRAZYFLIE_BASE)/src/config
+INCLUDES += -I$(CRAZYFLIE_BASE)/src/platform
+
+INCLUDES += -I$(CRAZYFLIE_BASE)/src/deck/interface -I$(CRAZYFLIE_BASE)/src/deck/drivers/interface
+INCLUDES += -I$(CRAZYFLIE_BASE)/src/drivers/interface -I$(CRAZYFLIE_BASE)/src/drivers/bosch/interface
+INCLUDES += -I$(CRAZYFLIE_BASE)/src/hal/interface
+INCLUDES += -I$(CRAZYFLIE_BASE)/src/modules/interface -I$(CRAZYFLIE_BASE)/src/modules/interface/kalman_core -I$(CRAZYFLIE_BASE)/src/modules/interface/lighthouse
+INCLUDES += -I$(CRAZYFLIE_BASE)/src/utils/interface -I$(CRAZYFLIE_BASE)/src/utils/interface/kve -I$(CRAZYFLIE_BASE)/src/utils/interface/lighthouse -I$(CRAZYFLIE_BASE)/src/utils/interface/tdoa
+
+INCLUDES += -I$(LIB)/FatFS
 INCLUDES += -I$(LIB)/CMSIS/STM32F4xx/Include
 INCLUDES += -I$(LIB)/STM32_USB_Device_Library/Core/inc
 INCLUDES += -I$(LIB)/STM32_USB_OTG_Driver/inc
-INCLUDES += -I$(CRAZYFLIE_BASE)/src/deck/interface -I$(CRAZYFLIE_BASE)/src/deck/drivers/interface
-INCLUDES += -I$(CRAZYFLIE_BASE)/src/utils/interface/clockCorrection
-INCLUDES += -I$(CRAZYFLIE_BASE)/src/utils/interface/tdoa
-INCLUDES += -I$(CRAZYFLIE_BASE)/src/utils/interface/lighthouse
-INCLUDES += -I$(CRAZYFLIE_BASE)/vendor/libdw1000/inc
-INCLUDES += -I$(LIB)/FatFS
-INCLUDES += -I$(LIB)/vl53l1
-INCLUDES += -I$(LIB)/vl53l1/core/inc
+INCLUDES += -I$(LIB)/STM32F4xx_StdPeriph_Driver/inc
+INCLUDES += -I$(LIB)/vl53l1 -I$(LIB)/vl53l1/core/inc
 
 CFLAGS += -g3
 ifeq ($(DEBUG), 1)
@@ -370,8 +371,23 @@ ifeq ($(SHELL),/bin/sh)
   COL_RESET=\033[m
 endif
 
-#################### Targets ###############################
+# This define n-thing is a standard hack to get newlines in GNU Make.
+define n
 
+
+endef
+
+# Make sure that the submodules are up to date.
+# Check if there are any files in the vendor directories, if not warn the user.
+ifeq ($(wildcard $(CRAZYFLIE_BASE)/vendor/*/*),)
+  $(error $n                                                                   \
+    The submodules does not seem to be present, consider fetching them by:$n   \
+      $$ git submodule init$n                                                  \
+      $$ git submodule update$n                                                \
+  )
+endif
+
+#################### Targets ###############################
 
 all: bin/ bin/dep bin/vendor check_submodules build
 build:
