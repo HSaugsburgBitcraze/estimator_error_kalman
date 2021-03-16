@@ -80,7 +80,6 @@
 
 /* Private variable */
 static bool selftestPassed;
-static bool canFly;
 static bool armed = ARM_INIT;
 static bool forceArm;
 static bool isInit;
@@ -286,16 +285,6 @@ void systemWaitStart(void)
   xSemaphoreGive(canStartMutex);
 }
 
-void systemSetCanFly(bool val)
-{
-  canFly = val;
-}
-
-bool systemCanFly(void)
-{
-  return canFly;
-}
-
 void systemSetArmed(bool val)
 {
   armed = val;
@@ -341,6 +330,5 @@ PARAM_GROUP_STOP(sytem)
 
 /* Loggable variables */
 LOG_GROUP_START(sys)
-LOG_ADD(LOG_INT8, canfly, &canFly)
 LOG_ADD(LOG_INT8, armed, &armed)
 LOG_GROUP_STOP(sys)

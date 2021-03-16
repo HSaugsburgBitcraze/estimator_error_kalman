@@ -1,4 +1,4 @@
-/**
+/*
  *    ||          ____  _ __
  * +------+      / __ )(_) /_______________ _____  ___
  * | 0xBC |     / __  / / __/ ___/ ___/ __ `/_  / / _ \
@@ -7,7 +7,7 @@
  *
  * Crazyflie control firmware
  *
- * Copyright (C) 2012-2021 BitCraze AB
+ * Copyright (C) 2021 Bitcraze AB
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,9 +21,15 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * sleepus.h: Micro second sleep
+ * supervisor.h - Keep track of system state
  */
-#pragma once
-#include <stdint.h>
 
-void sleepus(uint32_t us);
+#pragma once
+
+#include "stabilizer_types.h"
+
+void supervisorUpdate(const sensorData_t *data);
+
+bool supervisorCanFly(void);
+bool supervisorIsFlying(void);
+bool supervisorIsTumbled(void);
