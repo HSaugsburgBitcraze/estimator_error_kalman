@@ -533,40 +533,40 @@ static bool updateQueuedMeasurments(const Axis3f *gyro, const uint32_t tick) {
     doneUpdate = true;
   }
 
-  yawErrorMeasurement_t yawError;
-  while (stateEstimatorHasYawErrorPacket(&yawError))
-  {
-    kalmanCoreUpdateWithYawError(&coreData, &yawError);
-    doneUpdate = true;
-  }
-
-  heightMeasurement_t height;
-  while (stateEstimatorHasHeightPacket(&height))
-  {
-    kalmanCoreUpdateWithAbsoluteHeight(&coreData, &height);
-    doneUpdate = true;
-  }
-
-  distanceMeasurement_t dist;
-  while (stateEstimatorHasDistanceMeasurement(&dist))
-  {
-    kalmanCoreUpdateWithDistance(&coreData, &dist);
-    doneUpdate = true;
-  }
-
-  positionMeasurement_t pos;
-  while (stateEstimatorHasPositionMeasurement(&pos))
-  {
-    kalmanCoreUpdateWithPosition(&coreData, &pos);
-    doneUpdate = true;
-  }
-
-  poseMeasurement_t pose;
-  while (stateEstimatorHasPoseMeasurement(&pose))
-  {
-    kalmanCoreUpdateWithPose(&coreData, &pose);
-    doneUpdate = true;
-  }
+//  yawErrorMeasurement_t yawError;
+//  while (stateEstimatorHasYawErrorPacket(&yawError))
+//  {
+//    kalmanCoreUpdateWithYawError(&coreData, &yawError);
+//    doneUpdate = true;
+//  }
+//
+//  heightMeasurement_t height;
+//  while (stateEstimatorHasHeightPacket(&height))
+//  {
+//    kalmanCoreUpdateWithAbsoluteHeight(&coreData, &height);
+//    doneUpdate = true;
+//  }
+//
+//  distanceMeasurement_t dist;
+//  while (stateEstimatorHasDistanceMeasurement(&dist))
+//  {
+//    kalmanCoreUpdateWithDistance(&coreData, &dist);
+//    doneUpdate = true;
+//  }
+//
+//  positionMeasurement_t pos;
+//  while (stateEstimatorHasPositionMeasurement(&pos))
+//  {
+//    kalmanCoreUpdateWithPosition(&coreData, &pos);
+//    doneUpdate = true;
+//  }
+//
+//  poseMeasurement_t pose;
+//  while (stateEstimatorHasPoseMeasurement(&pose))
+//  {
+//    kalmanCoreUpdateWithPose(&coreData, &pose);
+//    doneUpdate = true;
+//  }
 
   tdoaMeasurement_t tdoa;
   while (stateEstimatorHasTDOAPacket(&tdoa))
@@ -582,12 +582,12 @@ static bool updateQueuedMeasurments(const Axis3f *gyro, const uint32_t tick) {
     doneUpdate = true;
   }
 
-  sweepAngleMeasurement_t angles;
-  while (stateEstimatorHasSweepAnglesPacket(&angles))
-  {
-    kalmanCoreUpdateWithSweepAngles(&coreData, &angles, tick, &sweepOutlierFilterState);
-    doneUpdate = true;
-  }
+//  sweepAngleMeasurement_t angles;
+//  while (stateEstimatorHasSweepAnglesPacket(&angles))
+//  {
+//    kalmanCoreUpdateWithSweepAngles(&coreData, &angles, tick, &sweepOutlierFilterState);
+//    doneUpdate = true;
+//  }
 
   return doneUpdate;
 }
