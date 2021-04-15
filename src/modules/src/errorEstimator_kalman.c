@@ -37,6 +37,7 @@
  */
 //#include "kalman_core.h"
 #include "errorEstimator_kalman.h"
+#include "estimator.h"
 #include "kalman_supervisor.h"
 
 #include "stm32f4xx.h"
@@ -59,120 +60,12 @@
 #define DEBUG_MODULE "ESTKALMAN"
 #include "debug.h"
 
-
+// Use the robust implementations of TWR and TDoA, off by default but can be turned on through a parameter.
+// The robust implementations use around 10% more CPU VS the standard flavours
+//static bool robustTwr = false;
+//static bool robustTdoa = false;
 
 // #define KALMAN_USE_BARO_UPDATE
-
-
-/**
- * Additionally, the filter supports the incorporation of additional sensors into the state estimate
- *
- * This is done via the external functions:
- * - bool estimatorKalmanEnqueueUWBPacket(uwbPacket_t *uwb)
- * - bool estimatorKalmanEnqueuePosition(positionMeasurement_t *pos)
- * - bool estimatorKalmanEnqueueDistance(distanceMeasurement_t *dist)
- *
- * As well as by the following internal functions and datatypes
- */
-
-// Measurements of a UWB Tx/Rx
-static xQueueHandle tdoaDataQueue;
-STATIC_MEM_QUEUE_ALLOC(tdoaDataQueue, 10, sizeof(tdoaMeasurement_t));
-
-static inline bool stateEstimatorHasTDOAPacket(tdoaMeasurement_t *uwb) {
-  return (pdTRUE == xQueueReceive(tdoaDataQueue, uwb, 0));
-}
-
-// Measurements of flow (dnx, dny)
-static xQueueHandle flowDataQueue;
-STATIC_MEM_QUEUE_ALLOC(flowDataQueue, 10, sizeof(flowMeasurement_t));
-
-static inline bool stateEstimatorHasFlowPacket(flowMeasurement_t *flow) {
-  return (pdTRUE == xQueueReceive(flowDataQueue, flow, 0));
-}
-
-// Measurements of TOF from laser sensor
-static xQueueHandle tofDataQueue;
-STATIC_MEM_QUEUE_ALLOC(tofDataQueue, 10, sizeof(tofMeasurement_t));
-
-static inline bool stateEstimatorHasTOFPacket(tofMeasurement_t *tof) {
-  return (pdTRUE == xQueueReceive(tofDataQueue, tof, 0));
-}
-
-
-//
-//// Distance-to-point measurements
-//static xQueueHandle distDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(distDataQueue, 10, sizeof(distanceMeasurement_t));
-//
-//static inline bool stateEstimatorHasDistanceMeasurement(distanceMeasurement_t *dist) {
-//  return (pdTRUE == xQueueReceive(distDataQueue, dist, 0));
-//}
-//
-//// Direct measurements of Crazyflie position
-//static xQueueHandle posDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(posDataQueue, 10, sizeof(positionMeasurement_t));
-//
-//static inline bool stateEstimatorHasPositionMeasurement(positionMeasurement_t *pos) {
-//  return (pdTRUE == xQueueReceive(posDataQueue, pos, 0));
-//}
-//
-//// Direct measurements of Crazyflie pose
-//static xQueueHandle poseDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(poseDataQueue, 10, sizeof(poseMeasurement_t));
-//
-//static inline bool stateEstimatorHasPoseMeasurement(poseMeasurement_t *pose) {
-//  return (pdTRUE == xQueueReceive(poseDataQueue, pose, 0));
-//}
-//
-//// Measurements of a UWB Tx/Rx
-//static xQueueHandle tdoaDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(tdoaDataQueue, 10, sizeof(tdoaMeasurement_t));
-//
-//static inline bool stateEstimatorHasTDOAPacket(tdoaMeasurement_t *uwb) {
-//  return (pdTRUE == xQueueReceive(tdoaDataQueue, uwb, 0));
-//}
-//
-//// Measurements of flow (dnx, dny)
-//static xQueueHandle flowDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(flowDataQueue, 10, sizeof(flowMeasurement_t));
-//
-//static inline bool stateEstimatorHasFlowPacket(flowMeasurement_t *flow) {
-//  return (pdTRUE == xQueueReceive(flowDataQueue, flow, 0));
-//}
-//
-//// Measurements of TOF from laser sensor
-//static xQueueHandle tofDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(tofDataQueue, 10, sizeof(tofMeasurement_t));
-//
-//static inline bool stateEstimatorHasTOFPacket(tofMeasurement_t *tof) {
-//  return (pdTRUE == xQueueReceive(tofDataQueue, tof, 0));
-//}
-//
-//// Absolute height measurement along the room Z
-//static xQueueHandle heightDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(heightDataQueue, 10, sizeof(heightMeasurement_t));
-//
-//static inline bool stateEstimatorHasHeightPacket(heightMeasurement_t *height) {
-//  return (pdTRUE == xQueueReceive(heightDataQueue, height, 0));
-//}
-//
-//
-//static xQueueHandle yawErrorDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(yawErrorDataQueue, 10, sizeof(yawErrorMeasurement_t));
-//
-//static inline bool stateEstimatorHasYawErrorPacket(yawErrorMeasurement_t *error)
-//{
-//  return (pdTRUE == xQueueReceive(yawErrorDataQueue, error, 0));
-//}
-//
-//static xQueueHandle sweepAnglesDataQueue;
-//STATIC_MEM_QUEUE_ALLOC(sweepAnglesDataQueue, 10, sizeof(sweepAngleMeasurement_t));
-//
-//static inline bool stateEstimatorHasSweepAnglesPacket(sweepAngleMeasurement_t *angles)
-//{
-//  return (pdTRUE == xQueueReceive(sweepAnglesDataQueue, angles, 0));
-//}
 
 // Semaphore to signal that we got data from the stabilzer loop to process
 static SemaphoreHandle_t runTaskSemaphore;
@@ -198,11 +91,11 @@ static float baroAslAccumulator;
 static uint32_t accAccumulatorCount;
 static uint32_t gyroAccumulatorCount;
 static uint32_t baroAccumulatorCount;
+static Axis3f accLatest;
+static Axis3f gyroLatest;
 
 // Data used to enable the task and stabilizer loop to run with minimal locking
 static state_t taskEstimatorState; // The estimator state produced by the task, copied to the stabilzer when needed.
-static Axis3f gyroSnapshot; // A snpashot of the latest gyro data, used by the task
-static Axis3f accSnapshot; // A snpashot of the latest acc data, used by the task
 
 // Statistics
 #define ONE_SECOND 1000
@@ -287,6 +180,7 @@ static void updateStrapdownAlgorithm(float *stateNav, Axis3f* accAverage, Axis3f
 static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, float dt);
 static bool updateNavigationFilter(arm_matrix_instance_f32 *Hk_Mat, float *innovation, float *R, float qualityGate);
 static bool updateNavigationFilter2(arm_matrix_instance_f32 *Hk_Mat,float *H2, float *innovation, float *R, float qualityGate);
+
 //static bool updateNavigationFilter2D(arm_matrix_instance_f32 *Hk_Mat, float *innovation, float *R, float qualityGate);
 static void navigationInit(void);
 static void updateWithBaro( float baroAsl);
@@ -295,6 +189,7 @@ static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody
 static void updateWithTdoaMeasurement(tdoaMeasurement_t *tdoa);
 static void resetNavigationStates( float *errorState);
 
+static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage);
 
 static void quatToEuler(float *quat, float *eulerAngles);
 static void quatFromAtt(float *attVec, float *quat);
@@ -318,22 +213,13 @@ static void multQuat(float *q1, float *q2, float *quatRes);
 
 static void errorKalmanTask(void* parameters);
 
-STATIC_MEM_TASK_ALLOC(errorKalmanTask, 9 * configMINIMAL_STACK_SIZE);
+STATIC_MEM_TASK_ALLOC_STACK_NO_DMA_CCM_SAFE(errorKalmanTask, 7 * configMINIMAL_STACK_SIZE);
+//STATIC_MEM_TASK_ALLOC(errorKalmanTask, 9 * configMINIMAL_STACK_SIZE);
 
 // --------------------------------------------------
 
 // Called one time during system startup
 void errorEstimatorKalmanTaskInit() {
-  //distDataQueue = STATIC_MEM_QUEUE_CREATE(distDataQueue);
-  //posDataQueue = STATIC_MEM_QUEUE_CREATE(posDataQueue);
-  //poseDataQueue = STATIC_MEM_QUEUE_CREATE(poseDataQueue);
-  tdoaDataQueue = STATIC_MEM_QUEUE_CREATE(tdoaDataQueue);
-  flowDataQueue = STATIC_MEM_QUEUE_CREATE(flowDataQueue);
-  tofDataQueue = STATIC_MEM_QUEUE_CREATE(tofDataQueue);
-  //heightDataQueue = STATIC_MEM_QUEUE_CREATE(heightDataQueue);
-  //yawErrorDataQueue = STATIC_MEM_QUEUE_CREATE(yawErrorDataQueue);
-  //sweepAnglesDataQueue = STATIC_MEM_QUEUE_CREATE(sweepAnglesDataQueue);
-
   vSemaphoreCreateBinary(runTaskSemaphore);
 
   dataMutex = xSemaphoreCreateMutexStatic(&dataMutexBuffer);
@@ -355,7 +241,10 @@ static void errorKalmanTask(void* parameters) {
   uint32_t lastPrediction = xTaskGetTickCount();
   uint32_t nextPrediction = xTaskGetTickCount();
   //uint32_t lastPNUpdate = xTaskGetTickCount();
-  uint32_t nextBaroUpdate = xTaskGetTickCount();
+  //uint32_t nextBaroUpdate = xTaskGetTickCount();
+
+  // Tracks whether an update to the state has been made, and the state therefore requires finalization
+  //bool doneUpdate = false;
 
   PattxOut = 0.0f;
   while (true) {
@@ -372,7 +261,7 @@ static void errorKalmanTask(void* parameters) {
     	omegaBias.y = gyroAccumulator.y/((float)gyroAccumulatorCount);
     	omegaBias.z = gyroAccumulator.z/((float)gyroAccumulatorCount);
 
-    	baroAslBias = baroAslAccumulator / baroAccumulatorCount;
+    	baroAslBias = baroAslAccumulator / ((float)baroAccumulatorCount);
 
     	initializedNav = true;
 
@@ -409,100 +298,68 @@ static void errorKalmanTask(void* parameters) {
 
     // Tracks whether an update to the state has been made, and the state therefore requires finalization
     uint32_t osTick = xTaskGetTickCount(); // would be nice if this had a precision higher than 1ms...
-
-    if(initializedNav && (accAccumulatorCount>0)&&(gyroAccumulatorCount>0)){
+	Axis3f gyroAverage;
+	if(initializedNav && (accAccumulatorCount>0)&&(gyroAccumulatorCount>0)){
 
 		// Run the system dynamics to predict the state forward.
 		if (osTick >= nextPrediction) { // update at the PREDICT_RATE
-		  float dt = T2S(osTick - lastPrediction);
+			float dt = T2S(osTick - lastPrediction);
 
-		  xSemaphoreTake(dataMutex, portMAX_DELAY);
+			xSemaphoreTake(dataMutex, portMAX_DELAY);
 
-		  // gyro is in deg/sec but the estimator requires rad/sec
-		  Axis3f gyroAverage;
-		  gyroAverage.x = (gyroAccumulator.x/((float)gyroAccumulatorCount)-omegaBias.x ) * DEG_TO_RAD;
-		  gyroAverage.y = (gyroAccumulator.y/((float)gyroAccumulatorCount)-omegaBias.y ) * DEG_TO_RAD;
-		  gyroAverage.z = (gyroAccumulator.z/((float)gyroAccumulatorCount)-omegaBias.z ) * DEG_TO_RAD;
+			// gyro is in deg/sec but the estimator requires rad/sec
 
-		  // accelerometer is in Gs but the estimator requires ms^-2
-		  Axis3f accAverage;
-		  accAverage.x = (accAccumulator.x /((float)accAccumulatorCount)-accBias.x)* GRAVITY_MAGNITUDE;
-		  accAverage.y = (accAccumulator.y /((float)accAccumulatorCount)-accBias.y) * GRAVITY_MAGNITUDE;
-		  accAverage.z = (accAccumulator.z /((float)accAccumulatorCount)-accBias.z) * GRAVITY_MAGNITUDE;
+			gyroAverage.x = (gyroAccumulator.x/((float)gyroAccumulatorCount)-omegaBias.x ) * DEG_TO_RAD;
+			gyroAverage.y = (gyroAccumulator.y/((float)gyroAccumulatorCount)-omegaBias.y ) * DEG_TO_RAD;
+			gyroAverage.z = (gyroAccumulator.z/((float)gyroAccumulatorCount)-omegaBias.z ) * DEG_TO_RAD;
 
-		  accAccumulator = (Axis3f){.axis={0}};
-		  accAccumulatorCount = 0;
-		  gyroAccumulator = (Axis3f){.axis={0}};
-		  gyroAccumulatorCount = 0;
+			// accelerometer is in Gs but the estimator requires ms^-2
+			Axis3f accAverage;
+			accAverage.x = (accAccumulator.x /((float)accAccumulatorCount)-accBias.x)* GRAVITY_MAGNITUDE;
+			accAverage.y = (accAccumulator.y /((float)accAccumulatorCount)-accBias.y) * GRAVITY_MAGNITUDE;
+			accAverage.z = (accAccumulator.z /((float)accAccumulatorCount)-accBias.z) * GRAVITY_MAGNITUDE;
 
-		  xSemaphoreGive(dataMutex);
+			accAccumulator = (Axis3f){.axis={0}};
+			accAccumulatorCount = 0;
+			gyroAccumulator = (Axis3f){.axis={0}};
+			gyroAccumulatorCount = 0;
 
-		  //prediction of strapdown navigation, setting also accumlator back to zero!
-		  updateStrapdownAlgorithm(&stateNav[0], &accAverage, &gyroAverage, dt);
+			xSemaphoreGive(dataMutex);
 
-		  // prediction step of error state Kalman Filter
-		  predictNavigationFilter(&stateNav[0], &accAverage, &gyroAverage, dt);
+			//prediction of strapdown navigation, setting also accumlator back to zero!
+			updateStrapdownAlgorithm(&stateNav[0], &accAverage, &gyroAverage, dt);
 
-		  accLog[0] = accAverage.x; // Logging Data
-		  accLog[1] = accAverage.y;
-		  accLog[2] = accAverage.z;
+			// prediction step of error state Kalman Filter
+			predictNavigationFilter(&stateNav[0], &accAverage, &gyroAverage, dt);
 
-		  omega[0] = gyroAverage.x; // Logging Data
-		  omega[1] = gyroAverage.y;
-		  omega[2] = gyroAverage.z;
+			accLog[0] = accAverage.x; // Logging Data
+			accLog[1] = accAverage.y;
+			accLog[2] = accAverage.z;
 
-		  //PxOut    =  covNavFilter[0][0]; // Logging Data
-		  //PvxOut   =  covNavFilter[3][3];
+			omega[0] = gyroAverage.x; // Logging Data
+			omega[1] = gyroAverage.y;
+			omega[2] = gyroAverage.z;
 
-		  lastPrediction = osTick;
-		  STATS_CNT_RATE_EVENT(&predictionCounter);
+			//PxOut    =  covNavFilter[0][0]; // Logging Data
+			//PvxOut   =  covNavFilter[3][3];
 
-		  nextPrediction = osTick + S2T(1.0f / PREDICT_RATE);
+			lastPrediction = osTick;
+			STATS_CNT_RATE_EVENT(&predictionCounter);
 
-		  Axis3f gyro;
-		  xSemaphoreTake(dataMutex, portMAX_DELAY);
-		  memcpy(&gyro, &gyroSnapshot, sizeof(gyro));
-		  xSemaphoreGive(dataMutex);
+			nextPrediction = osTick + S2T(1.0f / PREDICT_RATE);
 
-		  if(useNavigationFilter){
-			  if ((osTick > nextBaroUpdate) && (baroAccumulatorCount > 0)) {
-			  	  xSemaphoreTake(dataMutex, portMAX_DELAY);
+			//Axis3f gyro;
+			xSemaphoreTake(dataMutex, portMAX_DELAY);
+			//memcpy(&gyro, &gyroSnapshot, sizeof(gyro));
+			xSemaphoreGive(dataMutex);
 
-			  	  float baroAslMeas = (baroAslAccumulator/((float)baroAccumulatorCount)-baroAslBias);
-			  	  baroAslAccumulator   = 0.0f;
-			  	  baroAccumulatorCount = 0;
-			  	  xSemaphoreGive(dataMutex);
+		} // end if update at the PREDICT_RATE
+	} // end if bias errors are initialized
 
-			  	  baroOut = baroAslMeas;        // Logging Data
-
-			  	  updateWithBaro(baroAslMeas);
-
-			  	  nextBaroUpdate = osTick + S2T(1.0f / BARO_RATE);
-
-			  	  STATS_CNT_RATE_EVENT(&baroUpdateCounter);
-			  }
-
-			  flowMeasurement_t flow;
-			  while(stateEstimatorHasFlowPacket(&flow)) {
-				  updateWithFlowMeasurement(&flow, &gyroAverage);
-			  }
-
-			  // update Kalman Filter with tof measurement (height measurement flowdeck)
-			  tofMeasurement_t tofData;
-			  while(stateEstimatorHasTOFPacket(&tofData)) {
-				updateWithTofMeasurement(&tofData);
-			  }
-
-			  // update Kalman Filter with LPS measurement
-			  tdoaMeasurement_t tdoaData;
-			  while(stateEstimatorHasTDOAPacket(&tdoaData)) {
-				  updateWithTdoaMeasurement(&tdoaData);
-			  }
-		 }
-		 STATS_CNT_RATE_EVENT(&updateCounter);
-	  } // end if update at the PREDICT_RATE
-   } // end if bias errors are initialized
-
+    if(updateQueuedMeasurements(osTick, &gyroAverage)) {
+    	STATS_CNT_RATE_EVENT(&updateCounter);
+    	//      doneUpdate = true;
+    }
     xSemaphoreTake(dataMutex, portMAX_DELAY);
 
     quatToEuler(&stateNav[6], &eulerOut[0]);
@@ -527,12 +384,7 @@ static void errorKalmanTask(void* parameters) {
     taskEstimatorState.velocity.z = stateNav[5];
 
     taskEstimatorState.acc.timestamp = osTick;
-    // transform into ned frame
-    //accNed[0] = dcmTp[0][0]*accSnapshot.x+dcmTp[0][1]*accSnapshot.y+dcmTp[0][2]*accSnapshot.z;
-    //accNed[1] = dcmTp[1][0]*accSnapshot.x+dcmTp[1][1]*accSnapshot.y+dcmTp[1][2]*accSnapshot.z;
-    //accNed[2] = dcmTp[2][0]*accSnapshot.x+dcmTp[2][1]*accSnapshot.y+dcmTp[2][2]*accSnapshot.z-1.0f;
-
-
+    // transform into lab frame
     accNed[0] = (dcmTp[0][0]*accLog[0]+dcmTp[0][1]*accLog[1]+dcmTp[0][2]*accLog[2])/GRAVITY_MAGNITUDE;
     accNed[1] = (dcmTp[1][0]*accLog[0]+dcmTp[1][1]*accLog[1]+dcmTp[1][2]*accLog[2])/GRAVITY_MAGNITUDE;
     accNed[2] = (dcmTp[2][0]*accLog[0]+dcmTp[2][1]*accLog[1]+dcmTp[2][2]*accLog[2]-GRAVITY_MAGNITUDE)/GRAVITY_MAGNITUDE;
@@ -559,40 +411,13 @@ static void errorKalmanTask(void* parameters) {
   } // END infinite loop
 }
 
-void errorEstimatorKalman(state_t *state, sensorData_t *sensors, control_t *control, const uint32_t tick)
+//void errorEstimatorKalman(state_t *state, sensorData_t *sensors, control_t *control, const uint32_t tick)
+void errorEstimatorKalman(state_t *state, const uint32_t tick)
 {
+  systemWaitStart();
   // This function is called from the stabilizer loop. It is important that this call returns
   // as quickly as possible. The dataMutex must only be locked short periods by the task.
   xSemaphoreTake(dataMutex, portMAX_DELAY);
-
-  // Average the last IMU measurements. We do this because the prediction loop is
-  // slower than the IMU loop, but the IMU information is required externally at
-  // a higher rate (for body rate control).
-  if (sensorsReadAcc(&sensors->acc)) {
-    accAccumulator.x += sensors->acc.x;
-    accAccumulator.y += sensors->acc.y;
-    accAccumulator.z += sensors->acc.z;
-    accAccumulatorCount++;
-  }
-
-  if (sensorsReadGyro(&sensors->gyro)) {
-    gyroAccumulator.x += sensors->gyro.x;
-    gyroAccumulator.y += sensors->gyro.y;
-    gyroAccumulator.z += sensors->gyro.z;
-    gyroAccumulatorCount++;
-  }
-
-  // Average barometer data
-  //if (useBaroUpdate) {
-  if (sensorsReadBaro(&sensors->baro)) {
-      baroAslAccumulator += sensors->baro.asl;
-      baroAccumulatorCount++;
-  }
-  //}
-
-  // Make a copy of sensor data to be used by the task
-  memcpy(&gyroSnapshot, &sensors->gyro, sizeof(gyroSnapshot));
-  memcpy(&accSnapshot, &sensors->acc, sizeof(accSnapshot));
 
   // Copy the latest state, calculated by the task
   memcpy(state, &taskEstimatorState, sizeof(state_t));
@@ -604,13 +429,6 @@ void errorEstimatorKalman(state_t *state, sensorData_t *sensors, control_t *cont
 
 // Called when this estimator is activated
 void errorEstimatorKalmanInit(void) {
-  //xQueueReset(distDataQueue);
-  //xQueueReset(posDataQueue);
-  //xQueueReset(poseDataQueue);
-  xQueueReset(tdoaDataQueue);
-  xQueueReset(flowDataQueue);
-  xQueueReset(tofDataQueue);
-
   xSemaphoreTake(dataMutex, portMAX_DELAY);
   accAccumulator = (Axis3f){.axis={0}};
   gyroAccumulator = (Axis3f){.axis={0}};
@@ -625,88 +443,6 @@ void errorEstimatorKalmanInit(void) {
 
   isInit = true;
 }
-
-static bool appendMeasurement(xQueueHandle queue, void *measurement)
-{
-  portBASE_TYPE result;
-  bool isInInterrupt = (SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk) != 0;
-
-  if (isInInterrupt) {
-    portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
-    result = xQueueSendFromISR(queue, measurement, &xHigherPriorityTaskWoken);
-    if(xHigherPriorityTaskWoken == pdTRUE)
-    {
-      portYIELD();
-    }
-  } else {
-    result = xQueueSend(queue, measurement, 0);
-  }
-
-  if (result == pdTRUE) {
-    STATS_CNT_RATE_EVENT(&measurementAppendedCounter);
-    return true;
-  } else {
-    STATS_CNT_RATE_EVENT(&measurementNotAppendedCounter);
-    return true;
-  }
-}
-
-bool errorEstimatorKalmanEnqueueTDOA(const tdoaMeasurement_t *uwb)
-{
-  ASSERT(isInit);
-  return appendMeasurement(tdoaDataQueue, (void *)uwb);
-}
-
-//bool estimatorKalmanEnqueuePosition(const positionMeasurement_t *pos)
-//{
-//  ASSERT(isInit);
-//  return appendMeasurement(posDataQueue, (void *)pos);
-//}
-
-//bool estimatorKalmanEnqueuePose(const poseMeasurement_t *pose)
-//{
-//  ASSERT(isInit);
-//  return appendMeasurement(poseDataQueue, (void *)pose);
-//}
-
-//bool estimatorKalmanEnqueueDistance(const distanceMeasurement_t *dist)
-//{
-//  ASSERT(isInit);
-//  return appendMeasurement(distDataQueue, (void *)dist);
-//}
-
-bool errorEstimatorKalmanEnqueueFlow(const flowMeasurement_t *flow)
-{
-  // A flow measurement (dnx,  dny) [accumulated pixels]
-  ASSERT(isInit);
-  return appendMeasurement(flowDataQueue, (void *)flow);
-}
-
-bool errorEstimatorKalmanEnqueueTOF(const tofMeasurement_t *tof)
-{
-  // A distance (distance) [m] to the ground along the z_B axis.
-  ASSERT(isInit);
-  return appendMeasurement(tofDataQueue, (void *)tof);
-}
-
-//bool estimatorKalmanEnqueueAbsoluteHeight(const heightMeasurement_t *height)
-//{
-//  // A distance (height) [m] to the ground along the z axis.
-//  ASSERT(isInit);
-//  return appendMeasurement(heightDataQueue, (void *)height);
-//}
-//
-//bool estimatorKalmanEnqueueYawError(const yawErrorMeasurement_t* error)
-//{
-//  ASSERT(isInit);
-//  return appendMeasurement(yawErrorDataQueue, (void *)error);
-//}
-//
-//bool estimatorKalmanEnqueueSweepAngles(const sweepAngleMeasurement_t *angles)
-//{
-//  ASSERT(isInit);
-//  return appendMeasurement(sweepAnglesDataQueue, (void *)angles);
-//}
 
 bool errorEstimatorKalmanTest(void)
 {
@@ -877,56 +613,68 @@ static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, 
 //	covNavFilter[7][7] += powf(procRate_h * dt, 2);
 //	covNavFilter[8][8] += powf(procRate_z * dt, 2);
 
+//	// diagonal covariance matrix
+//	float preFactor_h = 0.333f*procA_h*dt*dt*dt+procVel_h*dt;
+//	float preFactor_z = 0.333f*procA_z*dt*dt*dt+procVel_z*dt;
+//
+//	covNavFilter[0][0] += preFactor_h;
+//	covNavFilter[1][1] += preFactor_h;
+//	covNavFilter[2][2] += preFactor_z;
+//
+//	preFactor_h = procA_h*dt;
+//	preFactor_z = procA_z*dt;
+//	covNavFilter[3][3] += preFactor_h;
+//	covNavFilter[4][4] += preFactor_h;
+//	covNavFilter[5][5] += preFactor_z;
+//
+//	covNavFilter[6][6] += procRate_h * dt;
+//	covNavFilter[7][7] += procRate_h * dt;
+//	covNavFilter[8][8] += procRate_z * dt;
 
-	float preFactor_h = 0.333f*procA_h*dt*dt*dt+procVel_h*dt;
-	float preFactor_z = 0.333f*procA_z*dt*dt*dt+procVel_z*dt;
 
-	covNavFilter[0][0] += preFactor_h;
-	covNavFilter[1][1] += preFactor_h;
-	covNavFilter[2][2] += preFactor_z;
-
+	// computed Qk matrix
 	// add process variances to covariance matrix
-	//preFactor_h = 0.5f*procA_h*dt*dt;
-    //preFactor_z = 0.5f*procA_z*dt*dt;
+	float preFactor_h = 0.5f*procA_h*dt*dt;
+	float preFactor_z = 0.5f*procA_z*dt*dt;
 
-    //covNavFilter[0][3] += preFactor_h;//*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-    //covNavFilter[3][0] += preFactor_h;//*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
+    covNavFilter[0][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
+    covNavFilter[3][0] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
 
-    //covNavFilter[0][4] += preFactor*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    //covNavFilter[1][3] += preFactor*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    //covNavFilter[3][1] += preFactor*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    //covNavFilter[4][0] += preFactor*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+    covNavFilter[0][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+    covNavFilter[1][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+    covNavFilter[3][1] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+    covNavFilter[4][0] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
 
-    //covNavFilter[0][5] += preFactor*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    //covNavFilter[2][3] += preFactor*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    //covNavFilter[3][2] += preFactor*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    //covNavFilter[5][0] += preFactor*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+    covNavFilter[0][5] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+    covNavFilter[2][3] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+    covNavFilter[3][2] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+    covNavFilter[5][0] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
 
-    //covNavFilter[1][4] += preFactor_h;//*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-    //covNavFilter[4][1] += preFactor_h;//*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
+    covNavFilter[1][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
+    covNavFilter[4][1] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
 
-    //covNavFilter[1][5] += preFactor*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    //covNavFilter[2][4] += preFactor*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    //covNavFilter[4][2] += preFactor*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    //covNavFilter[5][1] += preFactor*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+    covNavFilter[1][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+    covNavFilter[2][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+    covNavFilter[4][2] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+    covNavFilter[5][1] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
 
-    //covNavFilter[2][5] += preFactor_z;//*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
-    //covNavFilter[5][2] += preFactor_z;//*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
+    covNavFilter[2][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
+    covNavFilter[5][2] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
 
     preFactor_h = procA_h*dt;
     preFactor_z = procA_z*dt;
-    covNavFilter[3][3] += preFactor_h;//*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-    covNavFilter[4][4] += preFactor_h;//*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-    covNavFilter[5][5] += preFactor_z;//*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
+    covNavFilter[3][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
+    covNavFilter[4][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
+    covNavFilter[5][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
 
-    //covNavFilter[3][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    //covNavFilter[4][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+    covNavFilter[3][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+    covNavFilter[4][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
 
-//    //covNavFilter[3][5] += preFactor*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-//    //covNavFilter[5][3] += preFactor*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+    covNavFilter[3][5] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+    covNavFilter[5][3] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
 
-//    //covNavFilter[4][5] += preFactor*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-//    //covNavFilter[5][4] += preFactor*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+    covNavFilter[4][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+    covNavFilter[5][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
 
     covNavFilter[6][6] += procRate_h * dt;
 	covNavFilter[7][7] += procRate_h * dt;
@@ -1345,6 +1093,101 @@ static void resetNavigationStates( float *errorState){
 	transposeMatrix(&dcm[0][0], &dcmTp[0][0]);
 }
 
+
+
+static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage) {
+  bool doneUpdate = false;
+  // Pull the latest sensors values of interest; discard the rest
+   measurement_t m;
+   while (estimatorDequeue(&m)) {
+     switch (m.type) {
+       case MeasurementTypeTDOA:
+//         if(robustTdoa){
+//           // robust KF update with TDOA measurements
+//           kalmanCoreRobustUpdateWithTDOA(&coreData, &m.data.tdoa);
+//         }else{
+           // standard KF update
+    	   if(useNavigationFilter){
+    		   updateWithTdoaMeasurement(&m.data.tdoa);
+    	   }
+        	 //kalmanCoreUpdateWithTDOA(&coreData, &m.data.tdoa);
+ //        }
+         doneUpdate = true;
+         break;
+//       case MeasurementTypePosition:
+//         kalmanCoreUpdateWithPosition(&coreData, &m.data.position);
+//         doneUpdate = true;
+//         break;
+//       case MeasurementTypePose:
+//         kalmanCoreUpdateWithPose(&coreData, &m.data.pose);
+//         doneUpdate = true;
+//         break;
+//       case MeasurementTypeDistance:
+//         if(robustTwr){
+//             // robust KF update with UWB TWR measurements
+//             kalmanCoreRobustUpdateWithDistance(&coreData, &m.data.distance);
+//         }else{
+//             // standard KF update
+//             kalmanCoreUpdateWithDistance(&coreData, &m.data.distance);
+//         }
+//         doneUpdate = true;
+//         break;
+       case MeasurementTypeTOF:
+    	   if(useNavigationFilter){
+    		   updateWithTofMeasurement(&m.data.tof);
+    	   }
+         //kalmanCoreUpdateWithTof(&coreData, &m.data.tof);
+         doneUpdate = true;
+         break;
+//       case MeasurementTypeAbsoluteHeight:
+//         kalmanCoreUpdateWithAbsoluteHeight(&coreData, &m.data.height);
+//         doneUpdate = true;
+//         break;
+       case MeasurementTypeFlow:
+    	   if(useNavigationFilter){
+    		   updateWithFlowMeasurement(&m.data.flow, gyroAverage);
+    		   //kalmanCoreUpdateWithFlow(&coreData, &m.data.flow, &gyroLatest);
+    		   doneUpdate = true;
+    	   }
+         break;
+//       case MeasurementTypeYawError:
+//         kalmanCoreUpdateWithYawError(&coreData, &m.data.yawError);
+//         doneUpdate = true;
+//         break;
+//       case MeasurementTypeSweepAngle:
+//         kalmanCoreUpdateWithSweepAngles(&coreData, &m.data.sweepAngle, tick, &sweepOutlierFilterState);
+//         doneUpdate = true;
+//         break;
+       case MeasurementTypeGyroscope:
+         gyroAccumulator.x += m.data.gyroscope.gyro.x;
+         gyroAccumulator.y += m.data.gyroscope.gyro.y;
+         gyroAccumulator.z += m.data.gyroscope.gyro.z;
+         gyroLatest = m.data.gyroscope.gyro;
+         gyroAccumulatorCount++;
+         break;
+       case MeasurementTypeAcceleration:
+         accAccumulator.x += m.data.acceleration.acc.x;
+         accAccumulator.y += m.data.acceleration.acc.y;
+         accAccumulator.z += m.data.acceleration.acc.z;
+         accLatest = m.data.acceleration.acc;
+         accAccumulatorCount++;
+         break;
+       case MeasurementTypeBarometer:
+         //if (useBaroUpdate) {
+    	   if(useNavigationFilter){
+    		   updateWithBaro(m.data.barometer.baro.asl);
+    		   //kalmanCoreUpdateWithBaro(&coreData, m.data.barometer.baro.asl, quadIsFlying);
+    		   doneUpdate = true;
+    	   }
+         //}
+         break;
+       default:
+         break;
+     }
+   }
+   return doneUpdate;
+}
+
 static void updateWithBaro(float baroMeas){
 	float hBaro[DIM_FILTER] = {0};
 	arm_matrix_instance_f32 HBaro = {1, DIM_FILTER, hBaro};
@@ -1436,8 +1279,8 @@ static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody
 		meas_NY = flowNY;
 
 		innovation = flowNX - pred_NX;
-		R          = 4.0f; // flow deck has 0.25 px for heights around 1 m
-		//R          = (flow->stdDevX)*(flow->stdDevX);
+		//R          = 4.0f; // flow deck has 0.25 px for heights around 1 m
+		R          = (flow->stdDevX)*(flow->stdDevX);
 
 		hx[2] = (flow->dt * Npix / thetapix )*(-velocityBody[0]/(h_g*h_g)*dcm[2][2]);
 		hx[3] = (flow->dt * Npix / thetapix )*(dcm[0][0]*dcm[2][2]/h_g);
@@ -1452,8 +1295,8 @@ static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody
 		arm_matrix_instance_f32 Hy= {1, DIM_FILTER, hy};
 
 		innovation = flowNY - pred_NY;
-		R          = 4.0f; // flow deck has 0.25 px for heights around 1 m
-		//R          = (flow->stdDevY)*(flow->stdDevY);
+		//R          = 4.0f; // flow deck has 0.25 px for heights around 1 m
+		R          = (flow->stdDevY)*(flow->stdDevY);
 
 		hy[2] = (flow->dt * Npix / thetapix )*(-velocityBody[1]/(h_g*h_g)*dcm[2][2]);
 		hy[3] = (flow->dt * Npix / thetapix )*(dcm[1][0]*dcm[2][2]/h_g);
@@ -1536,8 +1379,8 @@ static void updateWithTdoaMeasurement(tdoaMeasurement_t *tdoa){
      float z = stateNav[2];
 
      // rephrase in north east down coordinate frame?
-     float x1 = tdoa->anchorPosition[1].x, y1 = tdoa->anchorPosition[1].y, z1 = tdoa->anchorPosition[1].z;
-     float x0 = tdoa->anchorPosition[0].x, y0 = tdoa->anchorPosition[0].y, z0 = tdoa->anchorPosition[0].z;
+     float x1 = tdoa->anchorPositions[1].x, y1 = tdoa->anchorPositions[1].y, z1 = tdoa->anchorPositions[1].z;
+     float x0 = tdoa->anchorPositions[0].x, y0 = tdoa->anchorPositions[0].y, z0 = tdoa->anchorPositions[0].z;
 
      float dx1 = x - x1;
      float dy1 = y - y1;

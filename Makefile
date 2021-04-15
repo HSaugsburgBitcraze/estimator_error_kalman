@@ -110,7 +110,7 @@ FREERTOS_OBJ = list.o tasks.o queue.o timers.o $(MEMMANG_OBJ)
 
 #FatFS
 VPATH += $(LIB)/FatFS
-PROJ_OBJ += diskio.o ff.o syscall.o ffunicode.o fatfs_sd.o
+PROJ_OBJ += ff.o ffunicode.o fatfs_sd.o
 ifeq ($(FATFS_DISKIO_TESTS), 1)
 PROJ_OBJ += diskio_function_tests.o
 CFLAGS += -DUSD_RUN_DISKIO_FUNCTION_TESTS
@@ -184,12 +184,13 @@ PROJ_OBJ += collision_avoidance.o health.o
 # Kalman estimator
 PROJ_OBJ += estimator_kalman.o kalman_core.o kalman_supervisor.o errorEstimator_kalman.o
 PROJ_OBJ += mm_distance.o mm_absolute_height.o mm_position.o mm_pose.o mm_tdoa.o mm_flow.o mm_tof.o mm_yaw_error.o mm_sweep_angles.o
+PROJ_OBJ += mm_tdoa_robust.o mm_distance_robust.o
 
 # High-Level Commander
 PROJ_OBJ += crtp_commander_high_level.o planner.o pptraj.o pptraj_compressed.o
 
 # Deck Core
-PROJ_OBJ += deck.o deck_info.o deck_drivers.o deck_test.o
+PROJ_OBJ += deck.o deck_info.o deck_drivers.o deck_test.o deck_memory.o
 
 # Deck API
 PROJ_OBJ += deck_constants.o
@@ -275,7 +276,7 @@ endif
 # Libs
 PROJ_OBJ += libarm_math.a
 
-OBJ = $(FREERTOS_OBJ) $(PORT_OBJ) $(ST_OBJ) $(PROJ_OBJ) $(CRT0)
+OBJ = $(FREERTOS_OBJ) $(PORT_OBJ) $(ST_OBJ) $(PROJ_OBJ) $(APP_OBJ) $(CRT0)
 
 ############### Compilation configuration ################
 AS = $(CROSS_COMPILE)as
@@ -340,7 +341,7 @@ CFLAGS += -Wdouble-promotion
 
 
 ASFLAGS = $(PROCESSOR) $(INCLUDES)
-LDFLAGS = --specs=nosys.specs --specs=nano.specs $(PROCESSOR) -Wl,-Map=$(PROG).map,--cref,--gc-sections,--undefined=uxTopUsedPriority
+LDFLAGS += --specs=nosys.specs --specs=nano.specs $(PROCESSOR) -Wl,-Map=$(PROG).map,--cref,--gc-sections,--undefined=uxTopUsedPriority
 LDFLAGS += -L$(CRAZYFLIE_BASE)/tools/make/F405/linker
 
 #Flags required by the ST library
