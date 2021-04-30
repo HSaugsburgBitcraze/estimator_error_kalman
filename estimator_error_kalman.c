@@ -39,6 +39,7 @@
 #include "estimator_error_kalman.h"
 #include "estimator.h"
 #include "kalman_supervisor.h"
+#include "estimator_out_of_tree.h"
 
 #include "stm32f4xx.h"
 
@@ -216,6 +217,39 @@ static void errorKalmanTask(void* parameters);
 STATIC_MEM_TASK_ALLOC_STACK_NO_DMA_CCM_SAFE(errorKalmanTask, 7 * configMINIMAL_STACK_SIZE);
 //STATIC_MEM_TASK_ALLOC(errorKalmanTask, 9 * configMINIMAL_STACK_SIZE);
 
+
+void estimatorOutOfTreeTaskInit(void)
+{
+    errorEstimatorKalmanTaskInit();
+}
+bool estimatorOutOfTreeTaskTest(void)
+{
+    return errorEstimatorKalmanTaskTest();
+}
+
+bool estimatorOutOfTreeTest(void)
+{
+  return isInit;
+}
+
+void estimatorOutOfTree(state_t *state, const uint32_t tick)
+{
+  // This function is called from the stabilizer loop. It is important that this call returns
+  // as quickly as possible. The dataMutex must only be locked short periods by the task.
+  xSemaphoreTake(dataMutex, portMAX_DELAY);
+
+  // Copy the latest state, calculated by the task
+  memcpy(state, &taskEstimatorState, sizeof(state_t));
+  xSemaphoreGive(dataMutex);
+
+  xSemaphoreGive(runTaskSemaphore);
+}
+
+void estimatorOutOfTreeInit(void)
+{
+    errorEstimatorKalmanInit();
+}
+
 // --------------------------------------------------
 
 // Called one time during system startup
@@ -226,7 +260,7 @@ void errorEstimatorKalmanTaskInit() {
 
   navigationInit();
 
-  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, ERROR_KALMAN_TASK_NAME, NULL, ERROR_KALMAN_TASK_PRI);
+  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, OOT_ESTIMATOR_TASK_NAME, NULL, OOT_ESTIMATOR_TASK_PRI);
 
   isInit = true;
 }

@@ -4,8 +4,5 @@ CFLAGS += -DOOT_ESTIMATOR
 VPATH += src/
 PROJ_OBJ += estimator_error_kalman.o
 
-CFLAGS += -DERROR_KALMAN_TASK_PRI=2
-CFLAGS += -DERROR_KALMAN_TASK_NAME="ERROR_KALMAN"
-
 CRAZYFLIE_BASE=../crazyflie-firmware
 include $(CRAZYFLIE_BASE)/Makefile
