@@ -39,7 +39,6 @@
 #include "estimator_error_kalman.h"
 #include "estimator.h"
 #include "kalman_supervisor.h"
-#include "estimator_out_of_tree.h"
 
 #include "stm32f4xx.h"
 
@@ -57,6 +56,8 @@
 #include "outlierFilter.h"
 
 #include "statsCnt.h"
+
+#include "config.h"
 
 #define DEBUG_MODULE "ESTKALMAN"
 #include "debug.h"
@@ -222,6 +223,7 @@ void estimatorOutOfTreeTaskInit(void)
 {
     errorEstimatorKalmanTaskInit();
 }
+
 bool estimatorOutOfTreeTaskTest(void)
 {
     return errorEstimatorKalmanTaskTest();
@@ -260,7 +262,7 @@ void errorEstimatorKalmanTaskInit() {
 
   navigationInit();
 
-  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, OOT_ESTIMATOR_TASK_NAME, NULL, OOT_ESTIMATOR_TASK_PRI);
+  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, "test", NULL, ERROR_KALMAN_TASK_PRI);
 
   isInit = true;
 }
@@ -283,7 +285,6 @@ static void errorKalmanTask(void* parameters) {
   PattxOut = 0.0f;
   while (true) {
     xSemaphoreTake(runTaskSemaphore, portMAX_DELAY);
-
     // compute bias error for first ticks averaging the measurements
     if ((accAccumulatorCount>numberInitSteps)&&(gyroAccumulatorCount>numberInitSteps)&&(!initializedNav)){
 
