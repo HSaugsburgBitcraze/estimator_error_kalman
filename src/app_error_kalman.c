@@ -17,12 +17,10 @@
 #define DEBUG_MODULE "KALMAN_ERROR"
 #include "debug.h"
 
+
 void appInit()
 {
+    DEBUG_PRINT("Initalizing Error Kalman Filter\n");
     errorEstimatorKalmanTaskInit();
-
-    if (errorEstimatorKalmanTaskTest() == false) {
-        DEBUG_PRINT("estimatorOutOfTreeTask [FAIL]\n");
-    }
 }
 

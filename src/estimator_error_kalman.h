@@ -46,9 +46,7 @@ void errorEstimatorKalmanInit(void);
 bool errorEstimatorKalmanTest(void);
 void errorEstimatorKalman(state_t *state, const uint32_t tick);
 
-
 void errorEstimatorKalmanTaskInit();
-bool errorEstimatorKalmanTaskTest();
 
 /**
  * The filter supports the incorporation of additional sensors into the state estimate via the following functions:

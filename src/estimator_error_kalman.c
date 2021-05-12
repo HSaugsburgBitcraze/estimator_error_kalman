@@ -224,11 +224,6 @@ void estimatorOutOfTreeTaskInit(void)
     errorEstimatorKalmanTaskInit();
 }
 
-bool estimatorOutOfTreeTaskTest(void)
-{
-    return errorEstimatorKalmanTaskTest();
-}
-
 bool estimatorOutOfTreeTest(void)
 {
   return isInit;
@@ -262,13 +257,9 @@ void errorEstimatorKalmanTaskInit() {
 
   navigationInit();
 
-  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, "test", NULL, ERROR_KALMAN_TASK_PRI);
+  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, "ERROR_KALMAN", NULL, ERROR_KALMAN_TASK_PRI);
 
   isInit = true;
-}
-
-bool errorEstimatorKalmanTaskTest() {
-  return isInit;
 }
 
 static void errorKalmanTask(void* parameters) {
