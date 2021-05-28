@@ -20,15 +20,8 @@
 #include "param.h"
 
 
-void appInit()
+void appMain()
 {
-
-#ifdef LIGHTHOUSE_AS_GROUNDTRUTH
-// then set method to crossing beam directly
-    paramVarId_t idLHMethod = paramGetVarId("lighthouse", "estimationMethod");
-    paramSetInt(idLHMethod, 0);
-#endif
-
     DEBUG_PRINT("Initalizing Error Kalman Filter\n");
     errorEstimatorKalmanTaskInit();
 }
