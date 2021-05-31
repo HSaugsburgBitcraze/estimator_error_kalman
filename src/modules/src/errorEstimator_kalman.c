@@ -1,17 +1,6 @@
 /**
  * Authored by Klaus Kefferpütz (https://www.hs-augsburg.de/fmv/kefferpuetz-klaus.html), December 2020
  *
- * Auxiliary functions developed for the implementation of
- *
- * "Fusing ultra-wideband range measurements with accelerometers and rate gyroscopes for quadrocopter state estimation"
- * http://ieeexplore.ieee.org/xpl/articleDetails.jsp?arnumber=7139421
- *
- * and
- *
- * "Covariance Correction Step for Kalman Filtering with an Attitude"
- * http://arc.aiaa.org/doi/abs/10.2514/1.G000848
- *
- * by Michael Hamer / Kristoffer Richardsson are re-used within this implemenation.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -477,9 +466,9 @@ static void updateStrapdownAlgorithm(float *stateNav, Axis3f* accAverage, Axis3f
 	accNed[2] = dcmTp[2][0]*accAverage->x+dcmTp[2][1]*accAverage->y+dcmTp[2][2]*accAverage->z-GRAVITY_MAGNITUDE;
 
 	// position update
-	stateNew[0] = stateNav[0]+stateNav[3]*dt+0.5f*accNed[0]*dt*dt;
-	stateNew[1] = stateNav[1]+stateNav[4]*dt+0.5f*accNed[1]*dt*dt;
-	stateNew[2] = stateNav[2]+stateNav[5]*dt+0.5f*accNed[2]*dt*dt;
+	stateNew[0] = stateNav[0]+stateNav[3]*dt;//+0.5f*accNed[0]*dt*dt;
+	stateNew[1] = stateNav[1]+stateNav[4]*dt;//+0.5f*accNed[1]*dt*dt;
+	stateNew[2] = stateNav[2]+stateNav[5]*dt;//+0.5f*accNed[2]*dt*dt;
 
 	// velocity update
 	stateNew[3] = stateNav[3]+accNed[0]*dt;
@@ -623,62 +612,70 @@ static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, 
 //
 //	preFactor_h = procA_h*dt;
 //	preFactor_z = procA_z*dt;
-//	covNavFilter[3][3] += preFactor_h;
-//	covNavFilter[4][4] += preFactor_h;
-//	covNavFilter[5][5] += preFactor_z;
-//
-//	covNavFilter[6][6] += procRate_h * dt;
-//	covNavFilter[7][7] += procRate_h * dt;
-//	covNavFilter[8][8] += procRate_z * dt;
+
+	covNavFilter[3][4] += procA_h*dt*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+procA_z*dt*dcmTp[0][2]*dcmTp[1][2];
+	covNavFilter[4][3] += procA_h*dt*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+procA_z*dt*dcmTp[0][2]*dcmTp[1][2];
+
+	covNavFilter[4][5] += procA_h*dt*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1])+procA_z*dt*dcmTp[1][2]*dcmTp[2][2];
+	covNavFilter[5][4] += procA_h*dt*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1])+procA_z*dt*dcmTp[1][2]*dcmTp[2][2];
+
+	covNavFilter[3][3] += procA_h*dt*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1])+procA_z*dt*dcmTp[0][2]*dcmTp[0][2];
+	covNavFilter[4][4] += procA_h*dt*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1])+procA_z*dt*dcmTp[1][2]*dcmTp[1][2];
+	covNavFilter[5][5] += procA_h*dt*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1])+procA_z*dt*dcmTp[2][2]*dcmTp[2][2];
+
+
+	covNavFilter[6][6] += procRate_h * dt;
+	covNavFilter[7][7] += procRate_h * dt;
+	covNavFilter[8][8] += procRate_z * dt;
 
 
 	// computed Qk matrix
 	// add process variances to covariance matrix
-	float preFactor_h = 0.5f*procA_h*dt*dt;
-	float preFactor_z = 0.5f*procA_z*dt*dt;
-
-    covNavFilter[0][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-    covNavFilter[3][0] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-
-    covNavFilter[0][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[1][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[3][1] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[4][0] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-
-    covNavFilter[0][5] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[2][3] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[3][2] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[5][0] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-
-    covNavFilter[1][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-    covNavFilter[4][1] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-
-    covNavFilter[1][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[2][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[4][2] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[5][1] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-
-    covNavFilter[2][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
-    covNavFilter[5][2] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
-
-    preFactor_h = procA_h*dt;
-    preFactor_z = procA_z*dt;
-    covNavFilter[3][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-    covNavFilter[4][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-    covNavFilter[5][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
-
-    covNavFilter[3][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[4][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-
-    covNavFilter[3][5] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[5][3] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-
-    covNavFilter[4][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[5][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-
-    covNavFilter[6][6] += procRate_h * dt;
-	covNavFilter[7][7] += procRate_h * dt;
-	covNavFilter[8][8] += procRate_z * dt;
+//	float preFactor_h = 0.5f*procA_h*dt*dt;
+//	float preFactor_z = 0.5f*procA_z*dt*dt;
+//
+//    covNavFilter[0][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
+//    covNavFilter[3][0] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
+//
+//    covNavFilter[0][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+//    covNavFilter[1][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+//    covNavFilter[3][1] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+//    covNavFilter[4][0] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+//
+//    covNavFilter[0][5] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+//    covNavFilter[2][3] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+//    covNavFilter[3][2] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+//    covNavFilter[5][0] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+//
+//    covNavFilter[1][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
+//    covNavFilter[4][1] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
+//
+//    covNavFilter[1][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+//    covNavFilter[2][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+//    covNavFilter[4][2] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+//    covNavFilter[5][1] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+//
+//    covNavFilter[2][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
+//    covNavFilter[5][2] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
+//
+//    preFactor_h = procA_h*dt;
+//    preFactor_z = procA_z*dt;
+//    covNavFilter[3][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
+//    covNavFilter[4][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
+//    covNavFilter[5][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
+//
+//    covNavFilter[3][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+//    covNavFilter[4][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
+//
+//    covNavFilter[3][5] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+//    covNavFilter[5][3] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
+//
+//    covNavFilter[4][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+//    covNavFilter[5][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
+//
+//    covNavFilter[6][6] += procRate_h * dt;
+//	covNavFilter[7][7] += procRate_h * dt;
+//	covNavFilter[8][8] += procRate_z * dt;
 }
 
 // Common update step for filter -> todo incorporate multidimensional measurement
