@@ -74,7 +74,7 @@ static bool useFlowDisabled = false;
 // Turn on adaptive standard deviation for the kalman filter
 static bool useAdaptiveStd = false;
 
-// Set standard deviation flow 
+// Set standard deviation flow
 // (will not work if useAdaptiveStd is on)
 static float flowStdFixed = 2.0f;
 
@@ -101,7 +101,7 @@ static void flowdeckTask(void *param)
 
     if (useAdaptiveStd)
     {
-      // The standard deviation is fitted by measurements flying over low and high texture 
+      // The standard deviation is fitted by measurements flying over low and high texture
       //   and looking at the shutter time
       float shutter_f = (float)currentMotion.shutter;
       stdFlow=0.0007984f *shutter_f + 0.4335f;
@@ -118,8 +118,8 @@ static void flowdeckTask(void *param)
 
     // Form flow measurement struct and push into the EKF
     flowMeasurement_t flowData;
-    flowData.stdDevX = stdFlow;    
-    flowData.stdDevY = stdFlow;    
+    flowData.stdDevX = stdFlow;
+    flowData.stdDevY = stdFlow;
     flowData.dt = 0.01;
 
 #if defined(USE_MA_SMOOTHING)
@@ -251,26 +251,81 @@ static const DeckDriver flowdeck2_deck = {
 
 DECK_DRIVER(flowdeck2_deck);
 
+/**
+ * Logging variables of the motion sensor of the flowdeck
+ */ 
 LOG_GROUP_START(motion)
+/**
+ * @brief True if motion occured since the last measurement
+ */
 LOG_ADD(LOG_UINT8, motion, &currentMotion.motion)
+/**
+ * @brief Flow X  measurment  [flow/fr]
+ */
 LOG_ADD(LOG_INT16, deltaX, &currentMotion.deltaX)
+/**
+ * @brief Flow Y measurement [flow/fr]
+ */
 LOG_ADD(LOG_INT16, deltaY, &currentMotion.deltaY)
+/**
+ * @brief Shutter time [clock cycles]
+ */
 LOG_ADD(LOG_UINT16, shutter, &currentMotion.shutter)
+/**
+ * @brief Maximum raw data value in frame
+ */
 LOG_ADD(LOG_UINT8, maxRaw, &currentMotion.maxRawData)
+/**
+ * @brief Minimum raw data value in frame
+ */
 LOG_ADD(LOG_UINT8, minRaw, &currentMotion.minRawData)
+/**
+ * @brief Avarage raw data value
+ */
 LOG_ADD(LOG_UINT8, Rawsum, &currentMotion.rawDataSum)
+/**
+ * @brief Counted flow outliers exluded from the estimator
+ */
 LOG_ADD(LOG_UINT8, outlierCount, &outlierCount)
+/**
+ * @brief Count of surface feature 
+ */
 LOG_ADD(LOG_UINT8, squal, &currentMotion.squal)
+/**
+ * @brief Standard deviation of flow measurement
+ */
 LOG_ADD(LOG_FLOAT, std, &stdFlow)
 LOG_GROUP_STOP(motion)
 
+/**
+ * Settings and parameters for handling of the flowdecks
+ * measurments
+ */
 PARAM_GROUP_START(motion)
+/**
+ * @brief Nonzero to not push the flow measurement in the EKF (default: 0)
+ */
 PARAM_ADD(PARAM_UINT8, disable, &useFlowDisabled)
+/**
+ * @brief Nonzero to turn on adaptive standard devivation estimation (default: 0)
+ */
 PARAM_ADD(PARAM_UINT8, adaptive, &useAdaptiveStd)
-PARAM_ADD(PARAM_FLOAT, flowStdFixed, &flowStdFixed)
+/**
+ * @brief Set standard devivation flow measurement (default: 2.0f)
+ */
+PARAM_ADD_CORE(PARAM_FLOAT, flowStdFixed, &flowStdFixed)
 PARAM_GROUP_STOP(motion)
 
 PARAM_GROUP_START(deck)
-PARAM_ADD(PARAM_UINT8 | PARAM_RONLY, bcFlow, &isInit1)
-PARAM_ADD(PARAM_UINT8 | PARAM_RONLY, bcFlow2, &isInit2)
+
+/**
+ * @brief Nonzero if Flow deck v1 is attached
+ */
+PARAM_ADD_CORE(PARAM_UINT8 | PARAM_RONLY, bcFlow, &isInit1)
+
+/**
+ * @brief Nonzero if [Flow deck v2](https://store.bitcraze.io/collections/decks/products/flow-deck-v2) is attached
+ */
+PARAM_ADD_CORE(PARAM_UINT8 | PARAM_RONLY, bcFlow2, &isInit2)
+
 PARAM_GROUP_STOP(deck)

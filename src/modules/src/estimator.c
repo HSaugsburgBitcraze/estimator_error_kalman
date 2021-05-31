@@ -86,6 +86,15 @@ static EstimatorFcns estimatorFunctions[] = {
 	    .update = errorEstimatorKalman,
 	    .name = "Error State Kalman",
 	},
+#ifdef OOT_ESTIMATOR
+    {
+        .init = estimatorOutOfTreeInit,
+        .deinit = NOT_IMPLEMENTED,
+        .test = estimatorOutOfTreeTest,
+        .update = estimatorOutOfTree,
+        .name = "OutOfTree",
+    },
+#endif
 };
 
 void stateEstimatorInit(StateEstimatorType estimator) {
