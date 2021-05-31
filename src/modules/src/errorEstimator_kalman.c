@@ -119,17 +119,17 @@ static float accNed[3];
 static float dcm[3][3],dcmTp[3][3];
 
 static float stdDevInitialPosition_xy = 50.0f;// 50.0f;// were static const
-static float stdDevInitialPosition_z  = 2.0f; //50.0f;// were static const
+static float stdDevInitialPosition_z  = 0.5f; //50.0f;// were static const
 static float stdDevInitialVelocity    = 0.0001f;// were static const
 static float stdDevInitialAtt         = 0.01f;  // were static const
 
 // variances of process noise (accelerometer and gyroscope noise)
-static float procA_h    = 0.05059f*0.05059f;// 0.1f*0.1f;
-static float procA_z    = 0.05059f*0.05059f;//0.1f*0.1f;
+static float procA_h    = 4.4755e-6f; //0.05059f*0.05059f;// 0.1f*0.1f;
+static float procA_z    = 8.5343e-6f; //0.05059f*0.05059f;//0.1f*0.1f;
 static float procVel_h  = 0.00f;
 static float procVel_z  = 0.00f;
-static float procRate_h = 0.0007f*0.0007f; //0.1f*0.1f;
-static float procRate_z = 0.0007f*0.0007f; // 0.1f*0.1f;
+static float procRate_h = 9.2495e-7f; //0.0007f*0.0007f; //0.1f*0.1f;
+static float procRate_z = 2.3124e-7f; //0.0007f*0.0007f; // 0.1f*0.1f;
 
 // measurement noise baro - variance
 static float measNoiseBaro = 0.7f*0.7f;
