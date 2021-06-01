@@ -133,16 +133,16 @@ static float dcm[3][3],dcmTp[3][3];
 
 static float stdDevInitialPosition_xy = 50.0f;// 50.0f;// were static const
 static float stdDevInitialPosition_z  = 2.0f; //50.0f;// were static const
-static float stdDevInitialVelocity    = 0.0001f;// were static const
+static float stdDevInitialVelocity    = 0.001f;// were static const
 static float stdDevInitialAtt         = 0.01f;  // were static const
 
 // variances of process noise (accelerometer and gyroscope noise)
-static float procA_h    = 0.05059f*0.05059f;// 0.1f*0.1f;
-static float procA_z    = 0.05059f*0.05059f;//0.1f*0.1f;
+static float procA_h    = 4.0f*2.4636e-6f;// 0.1f*0.1f;
+static float procA_z    = 10.0f*2.4636e-6f;;//0.1f*0.1f;
 static float procVel_h  = 0.00f;
 static float procVel_z  = 0.00f;
-static float procRate_h = 0.0007f*0.0007f; //0.1f*0.1f;
-static float procRate_z = 0.0007f*0.0007f; // 0.1f*0.1f;
+static float procRate_h = 5.9705e-8; //0.1f*0.1f;
+static float procRate_z = 5.9705e-8; //0.0007f*0.0007f; // 0.1f*0.1f;
 
 // measurement noise baro - variance
 static float measNoiseBaro = 0.7f*0.7f;
@@ -155,7 +155,7 @@ static float qualGateFlow = 1000.63f;
 static float qualGateTdoa = 1000.63f; // should not be lowered currently
 static float qualGateBaro = 1.64f;
 
-static bool activateFlowDeck = false;
+//static bool activateFlowDeck = false;
 static uint32_t nanCounterFilter = 0;
 
 static float accLog[3];
@@ -375,9 +375,9 @@ static void errorKalmanTask(void* parameters) {
 			nextPrediction = osTick + S2T(1.0f / PREDICT_RATE);
 
 			//Axis3f gyro;
-			xSemaphoreTake(dataMutex, portMAX_DELAY);
+			//xSemaphoreTake(dataMutex, portMAX_DELAY); KK
 			//memcpy(&gyro, &gyroSnapshot, sizeof(gyro));
-			xSemaphoreGive(dataMutex);
+			//xSemaphoreGive(dataMutex);  KK
 
 		} // end if update at the PREDICT_RATE
 	} // end if bias errors are initialized
@@ -386,17 +386,23 @@ static void errorKalmanTask(void* parameters) {
     	STATS_CNT_RATE_EVENT(&updateCounter);
     	//      doneUpdate = true;
     }
-    xSemaphoreTake(dataMutex, portMAX_DELAY);
+
 
     quatToEuler(&stateNav[6], &eulerOut[0]);
 
-	eulerOut[0] = eulerOut[0]*RAD_TO_DEG;
-	eulerOut[1] = eulerOut[1]*RAD_TO_DEG;
-	eulerOut[2] = eulerOut[2]*RAD_TO_DEG;
+		eulerOut[0] = eulerOut[0]*RAD_TO_DEG;
+		eulerOut[1] = eulerOut[1]*RAD_TO_DEG;
+		eulerOut[2] = eulerOut[2]*RAD_TO_DEG;
 
-	directionCosineMatrix(&stateNav[0], &dcm[0][0]);
-	transposeMatrix(&dcm[0][0], &dcmTp[0][0]);
+		directionCosineMatrix(&stateNav[0], &dcm[0][0]);
+		transposeMatrix(&dcm[0][0], &dcmTp[0][0]);
 
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+
+    // transform into lab frame
+    accNed[0] = (dcmTp[0][0]*accLog[0]+dcmTp[0][1]*accLog[1]+dcmTp[0][2]*accLog[2])/GRAVITY_MAGNITUDE;
+    accNed[1] = (dcmTp[1][0]*accLog[0]+dcmTp[1][1]*accLog[1]+dcmTp[1][2]*accLog[2])/GRAVITY_MAGNITUDE;
+    accNed[2] = (dcmTp[2][0]*accLog[0]+dcmTp[2][1]*accLog[1]+dcmTp[2][2]*accLog[2]-GRAVITY_MAGNITUDE)/GRAVITY_MAGNITUDE;
     // output global position
     taskEstimatorState.position.timestamp = osTick;
     taskEstimatorState.position.x = stateNav[0];
@@ -410,10 +416,6 @@ static void errorKalmanTask(void* parameters) {
     taskEstimatorState.velocity.z = stateNav[5];
 
     taskEstimatorState.acc.timestamp = osTick;
-    // transform into lab frame
-    accNed[0] = (dcmTp[0][0]*accLog[0]+dcmTp[0][1]*accLog[1]+dcmTp[0][2]*accLog[2])/GRAVITY_MAGNITUDE;
-    accNed[1] = (dcmTp[1][0]*accLog[0]+dcmTp[1][1]*accLog[1]+dcmTp[1][2]*accLog[2])/GRAVITY_MAGNITUDE;
-    accNed[2] = (dcmTp[2][0]*accLog[0]+dcmTp[2][1]*accLog[1]+dcmTp[2][2]*accLog[2]-GRAVITY_MAGNITUDE)/GRAVITY_MAGNITUDE;
 
     taskEstimatorState.acc.x = accNed[0];///GRAVITY_MAGNITUDE;
     taskEstimatorState.acc.y = accNed[1];///GRAVITY_MAGNITUDE;
@@ -503,9 +505,9 @@ static void updateStrapdownAlgorithm(float *stateNav, Axis3f* accAverage, Axis3f
 	accNed[2] = dcmTp[2][0]*accAverage->x+dcmTp[2][1]*accAverage->y+dcmTp[2][2]*accAverage->z-GRAVITY_MAGNITUDE;
 
 	// position update
-	stateNew[0] = stateNav[0]+stateNav[3]*dt+0.5f*accNed[0]*dt*dt;
-	stateNew[1] = stateNav[1]+stateNav[4]*dt+0.5f*accNed[1]*dt*dt;
-	stateNew[2] = stateNav[2]+stateNav[5]*dt+0.5f*accNed[2]*dt*dt;
+	stateNew[0] = stateNav[0]+stateNav[3]*dt;//+0.5f*accNed[0]*dt*dt;
+	stateNew[1] = stateNav[1]+stateNav[4]*dt;//+0.5f*accNed[1]*dt*dt;
+	stateNew[2] = stateNav[2]+stateNav[5]*dt;//+0.5f*accNed[2]*dt*dt;
 
 	// velocity update
 	stateNew[3] = stateNav[3]+accNed[0]*dt;
@@ -628,81 +630,17 @@ static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, 
 	mat_mult(&errorTransMat_Mat, &covNavFilter_Mat, &errorTrMatTimesCovMat_Mat);
 	mat_mult(&errorTrMatTimesCovMat_Mat, &errorTransMatTp_Mat, &covNavFilter_Mat);
 
-	// add process variances to covariance matrix
-//	covNavFilter[0][0] += powf(0.5f*procA_h*dt*dt + procVel_h*dt + 0.0f, 2);
-//	covNavFilter[1][1] += powf(0.5f*procA_h*dt*dt + procVel_h*dt + 0.0f, 2);
-//	covNavFilter[2][2] += powf(0.5f*procA_z*dt*dt + procVel_z*dt + 0.0f, 2);
-//	covNavFilter[3][3] += powf(procA_h*dt + procVel_h, 2);
-//	covNavFilter[4][4] += powf(procA_h*dt + procVel_h, 2);
-//	covNavFilter[5][5] += powf(procA_z*dt + procVel_z, 2);
-//	covNavFilter[6][6] += powf(procRate_h * dt, 2);
-//	covNavFilter[7][7] += powf(procRate_h * dt, 2);
-//	covNavFilter[8][8] += powf(procRate_z * dt, 2);
+	covNavFilter[3][4] += procA_h*dt*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+procA_z*dt*dcmTp[0][2]*dcmTp[1][2];
+	covNavFilter[4][3] += procA_h*dt*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+procA_z*dt*dcmTp[0][2]*dcmTp[1][2];
 
-//	// diagonal covariance matrix
-//	float preFactor_h = 0.333f*procA_h*dt*dt*dt+procVel_h*dt;
-//	float preFactor_z = 0.333f*procA_z*dt*dt*dt+procVel_z*dt;
-//
-//	covNavFilter[0][0] += preFactor_h;
-//	covNavFilter[1][1] += preFactor_h;
-//	covNavFilter[2][2] += preFactor_z;
-//
-//	preFactor_h = procA_h*dt;
-//	preFactor_z = procA_z*dt;
-//	covNavFilter[3][3] += preFactor_h;
-//	covNavFilter[4][4] += preFactor_h;
-//	covNavFilter[5][5] += preFactor_z;
-//
-//	covNavFilter[6][6] += procRate_h * dt;
-//	covNavFilter[7][7] += procRate_h * dt;
-//	covNavFilter[8][8] += procRate_z * dt;
+	covNavFilter[4][5] += procA_h*dt*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1])+procA_z*dt*dcmTp[1][2]*dcmTp[2][2];
+	covNavFilter[5][4] += procA_h*dt*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1])+procA_z*dt*dcmTp[1][2]*dcmTp[2][2];
 
+	covNavFilter[3][3] += procA_h*dt*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1])+procA_z*dt*dcmTp[0][2]*dcmTp[0][2];
+	covNavFilter[4][4] += procA_h*dt*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1])+procA_z*dt*dcmTp[1][2]*dcmTp[1][2];
+	covNavFilter[5][5] += procA_h*dt*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1])+procA_z*dt*dcmTp[2][2]*dcmTp[2][2];
 
-	// computed Qk matrix
-	// add process variances to covariance matrix
-	float preFactor_h = 0.5f*procA_h*dt*dt;
-	float preFactor_z = 0.5f*procA_z*dt*dt;
-
-    covNavFilter[0][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-    covNavFilter[3][0] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-
-    covNavFilter[0][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[1][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[3][1] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[4][0] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-
-    covNavFilter[0][5] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[2][3] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[3][2] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[5][0] += preFactor_z*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-
-    covNavFilter[1][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-    covNavFilter[4][1] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-
-    covNavFilter[1][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[2][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[4][2] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[5][1] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-
-    covNavFilter[2][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
-    covNavFilter[5][2] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
-
-    preFactor_h = procA_h*dt;
-    preFactor_z = procA_z*dt;
-    covNavFilter[3][3] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1]+dcmTp[0][2]*dcmTp[0][2]);
-    covNavFilter[4][4] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1]+dcmTp[1][2]*dcmTp[1][2]);
-    covNavFilter[5][5] += preFactor_z*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1]+dcmTp[2][2]*dcmTp[2][2]);
-
-    covNavFilter[3][4] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-    covNavFilter[4][3] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1]+dcmTp[0][2]*dcmTp[1][2]);
-
-    covNavFilter[3][5] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-    covNavFilter[5][3] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1]+dcmTp[0][2]*dcmTp[2][2]);
-
-    covNavFilter[4][5] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-    covNavFilter[5][4] += preFactor_z*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1]+dcmTp[1][2]*dcmTp[2][2]);
-
-    covNavFilter[6][6] += procRate_h * dt;
+	covNavFilter[6][6] += procRate_h * dt;
 	covNavFilter[7][7] += procRate_h * dt;
 	covNavFilter[8][8] += procRate_z * dt;
 }
@@ -1128,16 +1066,11 @@ static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage) {
    while (estimatorDequeue(&m)) {
      switch (m.type) {
        case MeasurementTypeTDOA:
-//         if(robustTdoa){
-//           // robust KF update with TDOA measurements
-//           kalmanCoreRobustUpdateWithTDOA(&coreData, &m.data.tdoa);
-//         }else{
-           // standard KF update
+
     	   if(useNavigationFilter){
     		   updateWithTdoaMeasurement(&m.data.tdoa);
     	   }
-        	 //kalmanCoreUpdateWithTDOA(&coreData, &m.data.tdoa);
- //        }
+
          doneUpdate = true;
          break;
 //       case MeasurementTypePosition:
@@ -1202,7 +1135,6 @@ static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage) {
          //if (useBaroUpdate) {
     	   if(useNavigationFilter){
     		   updateWithBaro(m.data.barometer.baro.asl);
-    		   //kalmanCoreUpdateWithBaro(&coreData, m.data.barometer.baro.asl, quadIsFlying);
     		   doneUpdate = true;
     	   }
          //}
@@ -1258,15 +1190,16 @@ static void updateWithTofMeasurement(tofMeasurement_t *tof){
 		hTof[2] = 1/dcm[2][2];
 		R = (tof->stdDev)*(tof->stdDev);
 
-		doneUpdate = updateNavigationFilter(&HTof, &innovation, &R, qualGateTof);
+		updateNavigationFilter(&HTof, &innovation, &R, qualGateTof);
+		//doneUpdate = updateNavigationFilter(&HTof, &innovation, &R, qualGateTof);
 
-		if(doneUpdate){
-			activateFlowDeck = true;
-		}
-		else{
-			activateFlowDeck = false;
-		}
-     }
+		//if(doneUpdate){
+		//	activateFlowDeck = true;
+		//}
+		//else{
+		//	activateFlowDeck = false;
+		//}
+  }
 }
 
 // successive one-dimemnsional measurements
@@ -1279,7 +1212,7 @@ static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody
     float innovation;
     float R;
 
-    if(activateFlowDeck){
+    //if(activateFlowDeck){
 		// Saturate elevation in prediction and correction to avoid singularities
 		if (  stateNav[2] < 0.1f ) {
 			h_g = 0.1f;
@@ -1330,7 +1263,7 @@ static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody
 		hy[5] = (flow->dt * Npix / thetapix )*(dcm[1][2]*dcm[2][2]/h_g);
 
 		updateNavigationFilter(&Hy, &innovation, &R, qualGateFlow);
-    }
+    //}
 }
 
 // multidimensional measurement
