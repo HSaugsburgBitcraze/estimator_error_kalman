@@ -304,6 +304,7 @@ static void errorKalmanTask(void* parameters) {
 
     // If the client triggers an estimator reset via parameter update "kalman.resetEstimation"
     if (resetNavigation) {
+	  DEBUG_PRINT("Reset Filter\n");
       errorEstimatorKalmanInit();
       resetNavigation = false;
 
@@ -1528,16 +1529,16 @@ LOG_GROUP_START(sensorFilter)
 LOG_GROUP_STOP(sensorFilter)
 
 // Stock log groups
-LOG_GROUP_START(kalman)
+LOG_GROUP_START(errorkalman)
   STATS_CNT_RATE_LOG_ADD(rtUpdate, &updateCounter)
   STATS_CNT_RATE_LOG_ADD(rtPred, &predictionCounter)
   STATS_CNT_RATE_LOG_ADD(rtBaro, &baroUpdateCounter)
   STATS_CNT_RATE_LOG_ADD(rtFinal, &finalizeCounter)
   STATS_CNT_RATE_LOG_ADD(rtApnd, &measurementAppendedCounter)
   STATS_CNT_RATE_LOG_ADD(rtRej, &measurementNotAppendedCounter)
-LOG_GROUP_STOP(kalman)
+LOG_GROUP_STOP(errorkalman)
 
-PARAM_GROUP_START(kalman)
+PARAM_GROUP_START(errorkalman)
   PARAM_ADD(PARAM_UINT8, resetEstimation, &resetNavigation)
   PARAM_ADD(PARAM_UINT8, useNavFilter, &useNavigationFilter)
   PARAM_ADD(PARAM_FLOAT, sigmaInitPos_xy, &stdDevInitialPosition_xy)
@@ -1555,4 +1556,4 @@ PARAM_GROUP_START(kalman)
   PARAM_ADD(PARAM_FLOAT, qualityGateFlow , &qualGateFlow)
   PARAM_ADD(PARAM_FLOAT, qualityGateTdoa , &qualGateTdoa)
   PARAM_ADD(PARAM_FLOAT, qualityGateBaro, &qualGateBaro)
-PARAM_GROUP_STOP(kalman)
+PARAM_GROUP_STOP(errorkalman)
