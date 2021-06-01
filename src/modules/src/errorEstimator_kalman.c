@@ -142,7 +142,7 @@ static float qualGateFlow = 1000.63f;
 static float qualGateTdoa = 1000.63f; // should not be lowered currently
 static float qualGateBaro = 1.64f;
 
-static bool activateFlowDeck = false;
+//static bool activateFlowDeck = true;
 static uint32_t nanCounterFilter = 0;
 
 static float accLog[3];
@@ -1205,39 +1205,39 @@ static void updateWithTofMeasurement(tofMeasurement_t *tof){
 	arm_matrix_instance_f32 HTof = {1, DIM_FILTER, hTof};
     float innovation;
     float R;
-    bool doneUpdate = false;
+   // bool doneUpdate = false;
 
     // Only update the filter if the measurement is reliable (\hat{h} -> infty when R[2][2] -> 0)
     if ((fabs(dcm[2][2]) > 0.1) && (dcm[2][2] > 0.0f)){
 
-        float angle = fabsf(acosf(dcm[2][2])) - DEG_TO_RAD * (15.0f / 2.0f);
- 		if(angle < 0.0f) {
- 		   angle = 0.0f;
- 		}
+      float angle = fabsf(acosf(dcm[2][2])) - DEG_TO_RAD * (15.0f / 2.0f);
+			if(angle < 0.0f) {
+				angle = 0.0f;
+			}
 
-		float predictedDistance = stateNav[2]/dcm[2][2];
-		float measuredDistance  = tof->distance; // [m]
+			float predictedDistance = stateNav[2]/dcm[2][2];
+			float measuredDistance  = tof->distance; // [m]
 
-		if(measuredDistance < 0.03f){
-			measuredDistance = 0.0f;
-		}
+			if(measuredDistance < 0.03f){
+				measuredDistance = 0.0f;
+			}
 
-		predDist   = predictedDistance;
-		measDist   = measuredDistance;
-		innovation = measuredDistance - predictedDistance;
+			predDist   = predictedDistance;
+			measDist   = measuredDistance;
+			innovation = measuredDistance - predictedDistance;
 
-		hTof[2] = 1/dcm[2][2];
-		R = (tof->stdDev)*(tof->stdDev);
+			hTof[2] = 1/dcm[2][2];
+			R = (tof->stdDev)*(tof->stdDev);
 
-		doneUpdate = updateNavigationFilter(&HTof, &innovation, &R, qualGateTof);
-
-		if(doneUpdate){
-			activateFlowDeck = true;
-		}
-		else{
-			activateFlowDeck = false;
-		}
-     }
+		//	doneUpdate = updateNavigationFilter(&HTof, &innovation, &R, qualGateTof);
+		updateNavigationFilter(&HTof, &innovation, &R, qualGateTof);
+		// if(doneUpdate){
+		// 	activateFlowDeck = true;
+		// }
+		// else{
+		// 	activateFlowDeck = false;
+		// }
+  }
 }
 
 // successive one-dimemnsional measurements
@@ -1250,7 +1250,7 @@ static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody
     float innovation;
     float R;
 
-    if(activateFlowDeck){
+  //  if(activateFlowDeck){
 		// Saturate elevation in prediction and correction to avoid singularities
 		if (  stateNav[2] < 0.1f ) {
 			h_g = 0.1f;
@@ -1301,7 +1301,7 @@ static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody
 		hy[5] = (flow->dt * Npix / thetapix )*(dcm[1][2]*dcm[2][2]/h_g);
 
 		updateNavigationFilter(&Hy, &innovation, &R, qualGateFlow);
-    }
+//  }
 }
 
 // multidimensional measurement
