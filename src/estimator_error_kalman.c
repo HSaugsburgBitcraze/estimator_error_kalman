@@ -1167,7 +1167,7 @@ static void updateWithTofMeasurement(tofMeasurement_t *tof){
 	arm_matrix_instance_f32 HTof = {1, DIM_FILTER, hTof};
     float innovation;
     float R;
-    bool doneUpdate = false;
+  //  bool doneUpdate = false;
 
     // Only update the filter if the measurement is reliable (\hat{h} -> infty when R[2][2] -> 0)
     if ((fabs(dcm[2][2]) > 0.1) && (dcm[2][2] > 0.0f)){
