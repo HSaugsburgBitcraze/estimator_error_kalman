@@ -885,6 +885,9 @@ static void usdWriteTask(void* prm)
               case eventtriggerType_float:
                 typeChar = 'f';
                 break;
+              case eventtrigerType_fp16:
+                typeChar = 'e';
+                break;
               default:
                 ASSERT(false);
               }
@@ -1041,7 +1044,7 @@ DECK_DRIVER(usd_deck);
 PARAM_GROUP_START(deck)
 
 /**
- * @brief Nonzero if [SD-card deck](https://store.bitcraze.io/collections/decks/products/sd-card-deck) is attached
+ * @brief Nonzero if [SD-card deck](%https://store.bitcraze.io/collections/decks/products/sd-card-deck) is attached
 */
 PARAM_ADD_CORE(PARAM_UINT8 | PARAM_RONLY, bcUSD, &isInit)
 
