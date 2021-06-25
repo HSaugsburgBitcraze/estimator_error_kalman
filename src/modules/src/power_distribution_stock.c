@@ -101,6 +101,11 @@ void powerDistribution(const control_t *control)
                                control->yaw);
   #endif
 
+  //motorPower.m1 = 0.0f;
+  //motorPower.m2 = 0.0f;
+  //motorPower.m3 = 0.0f;
+  //motorPower.m4 = 0.0f;
+
   if (motorSetEnable)
   {
     motorsSetRatio(MOTOR_M1, motorPowerSet.m1);

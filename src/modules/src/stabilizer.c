@@ -48,6 +48,8 @@
 #include "health.h"
 #include "supervisor.h"
 
+#include "pathController.h"
+
 #include "estimator.h"
 #include "usddeck.h"
 #include "quatcompress.h"
@@ -73,6 +75,14 @@ static ControllerType controllerType;
 static STATS_CNT_RATE_DEFINE(stabilizerRate, 500);
 static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
+
+
+static uint32_t lastCallTick;
+static uint8_t pathCtrMode = 0;
+static uint8_t oldMode = 0;
+static pathControlData_t pathControlData;
+static pathPacket_t pathPacketCntr;
+
 
 static struct {
   // position - mm
@@ -256,13 +266,32 @@ static void stabilizerTask(void* param)
       stateEstimator(&state, tick);
       compressState();
 
-      commanderGetSetpoint(&setpoint, &state);
-      compressSetpoint();
+      uint32_t osTick = xTaskGetTickCount();
 
+      if(pathCtrMode == 0){
+        oldMode = 0;
+        commanderGetSetpoint(&setpoint, &state);
+        
+        lastCallTick = osTick;
+      }
+      else{
+        if(oldMode==0){
+          initPathController(&state, &pathControlData, &pathPacketCntr); 
+          oldMode = 1;         
+        }
+        if ((osTick - lastCallTick) >= configTICK_RATE_HZ / RATE_PATH_CTRL) {
+          float deltaT = (osTick  - lastCallTick)*0.001f;
+
+          pathController(&setpoint, &state, &pathPacketCntr, &pathControlData, deltaT);
+          lastCallTick = osTick;
+         }
+
+
+      }
+      compressSetpoint();
       collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
       controller(&control, &setpoint, &sensorData, &state, tick);
-
       checkEmergencyStopTimeout();
 
       //
@@ -330,6 +359,7 @@ PARAM_ADD_CORE(PARAM_UINT8, controller, &controllerType)
  * @brief If set to nonzero will turn off power
  */
 PARAM_ADD_CORE(PARAM_UINT8, stop, &emergencyStop)
+PARAM_ADD_CORE(PARAM_UINT8, pathCtrMode, &pathCtrMode)
 PARAM_GROUP_STOP(stabilizer)
 
 

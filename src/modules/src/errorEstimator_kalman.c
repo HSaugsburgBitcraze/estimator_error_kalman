@@ -49,13 +49,6 @@
 #define DEBUG_MODULE "ESTKALMAN"
 #include "debug.h"
 
-// Use the robust implementations of TWR and TDoA, off by default but can be turned on through a parameter.
-// The robust implementations use around 10% more CPU VS the standard flavours
-//static bool robustTwr = false;
-//static bool robustTdoa = false;
-
-// #define KALMAN_USE_BARO_UPDATE
-
 // Semaphore to signal that we got data from the stabilzer loop to process
 static SemaphoreHandle_t runTaskSemaphore;
 
@@ -64,7 +57,7 @@ static SemaphoreHandle_t runTaskSemaphore;
 static SemaphoreHandle_t dataMutex;
 static StaticSemaphore_t dataMutexBuffer;
 
-#define PREDICT_RATE RATE_250_HZ // this is slower than the IMU update rate of 500Hz
+#define PREDICT_RATE RATE_100_HZ // this is slower than the IMU update rate of 500Hz
 #define BARO_RATE RATE_25_HZ
 
 #define MAX_COVARIANCE (100)
@@ -96,12 +89,6 @@ static STATS_CNT_RATE_DEFINE(baroUpdateCounter, ONE_SECOND);
 static STATS_CNT_RATE_DEFINE(finalizeCounter, ONE_SECOND);
 static STATS_CNT_RATE_DEFINE(measurementAppendedCounter, ONE_SECOND);
 static STATS_CNT_RATE_DEFINE(measurementNotAppendedCounter, ONE_SECOND);
-
-//#ifdef KALMAN_USE_BARO_UPDATE
-//static const bool useBaroUpdate = true;
-//#else
-//static const bool useBaroUpdate = false;
-//#endif
 
 // for error filter version
 #define DIM_FILTER 9
@@ -179,15 +166,8 @@ static bool resetNavigation = true;
 
 static void updateStrapdownAlgorithm(float *stateNav, Axis3f* accAverage, Axis3f* gyroAverage, float dt);
 static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, float dt);
-//static bool updateNavigationFilter(arm_matrix_instance_f32 *Hk_Mat, float *innovation, float *R, float qualityGate);
-//static bool updateNavigationFilter2(arm_matrix_instance_f32 *Hk_Mat,float *H2, float *innovation, float *R, float qualityGate);
 
-//static bool updateNavigationFilter2D(arm_matrix_instance_f32 *Hk_Mat, float *innovation, float *R, float qualityGate);
 static void navigationInit(void);
-// static void updateWithBaro( float baroAsl);
-// static void updateWithTofMeasurement(tofMeasurement_t *tof);
-// static void updateWithFlowMeasurement(flowMeasurement_t *flow, Axis3f *omegaBody);
-// static void updateWithTdoaMeasurement(tdoaMeasurement_t *tdoa);
 static void resetNavigationStates( void );
 
 static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage);
@@ -208,14 +188,11 @@ static void quatToEuler(float *quat, float *eulerAngles);
 static void multQuat(float *q1, float *q2, float *quatRes);
 static void transposeMatrix( float *mat, float *matTp);
 
-
 static void errorKalmanTask(void* parameters);
 
 STATIC_MEM_TASK_ALLOC_STACK_NO_DMA_CCM_SAFE(errorKalmanTask, 7 * configMINIMAL_STACK_SIZE);
-//STATIC_MEM_TASK_ALLOC(errorKalmanTask, 9 * configMINIMAL_STACK_SIZE);
 
 // --------------------------------------------------
-
 // Called one time during system startup
 void errorEstimatorKalmanTaskInit() {
   vSemaphoreCreateBinary(runTaskSemaphore);
@@ -299,10 +276,7 @@ static void errorKalmanTask(void* parameters) {
 		if (osTick >= nextPrediction) { // update at the PREDICT_RATE
 			float dt = T2S(osTick - lastPrediction);
 
-			//xSemaphoreTake(dataMutex, portMAX_DELAY);
-
 			// gyro is in deg/sec but the estimator requires rad/sec
-
 			gyroAverage.x = (gyroAccumulator.x/((float)gyroAccumulatorCount)-omegaBias.x ) * DEG_TO_RAD;
 			gyroAverage.y = (gyroAccumulator.y/((float)gyroAccumulatorCount)-omegaBias.y ) * DEG_TO_RAD;
 			gyroAverage.z = (gyroAccumulator.z/((float)gyroAccumulatorCount)-omegaBias.z ) * DEG_TO_RAD;
@@ -317,8 +291,6 @@ static void errorKalmanTask(void* parameters) {
 			accAccumulatorCount = 0;
 			gyroAccumulator = (Axis3f){.axis={0}};
 			gyroAccumulatorCount = 0;
-
-			//xSemaphoreGive(dataMutex);
 
 			//prediction of strapdown navigation, setting also accumlator back to zero!
 			updateStrapdownAlgorithm(&stateNav[0], &accAverage, &gyroAverage, dt);
@@ -378,9 +350,9 @@ static void errorKalmanTask(void* parameters) {
   accNed[1] = (dcmTp[1][0]*accLog[0]+dcmTp[1][1]*accLog[1]+dcmTp[1][2]*accLog[2])/GRAVITY_MAGNITUDE;
   accNed[2] = (dcmTp[2][0]*accLog[0]+dcmTp[2][1]*accLog[1]+dcmTp[2][2]*accLog[2]-GRAVITY_MAGNITUDE)/GRAVITY_MAGNITUDE;
 
-  taskEstimatorState.acc.x = accNed[0];///GRAVITY_MAGNITUDE;
-  taskEstimatorState.acc.y = accNed[1];///GRAVITY_MAGNITUDE;
-  taskEstimatorState.acc.z = accNed[2];///GRAVITY_MAGNITUDE;
+  taskEstimatorState.acc.x = accNed[0];
+  taskEstimatorState.acc.y = accNed[1];
+  taskEstimatorState.acc.z = accNed[2];
 
   // from https://www.bitcraze.io/documentation/system/platform/cf2-coordinate-system/
   //roll and yaw are clockwise rotating around the axis looking from the origin (right-hand-thumb)
@@ -537,15 +509,10 @@ static void navigationInit(void){
 static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, float dt){
 	float accTs[3] = {acc->x*dt, acc->y*dt, acc->z*dt};
 	float omegaTs[3] = {gyro->x*dt, gyro->y*dt, gyro->z*dt};
-	//float L[DIM_FILTER][DIM_FILTER] = {0};
 	float covNew[DIM_FILTER][DIM_FILTER] = {0};
 	float errorTransMat[DIM_FILTER][DIM_FILTER] = {0};
-	//float w0 = KAPPA_UKF/((float) DIM_FILTER+KAPPA_UKF);
-  //float w1 = 0.5f/((float) DIM_FILTER+KAPPA_UKF);
-//	float scale = sqrtf((float)DIM_FILTER+KAPPA_UKF);
 	float sigmaTmpPlus[DIM_FILTER][DIM_FILTER] = {0};
 	float sigmaTmpMinus[DIM_FILTER][DIM_FILTER] = {0};
-	//float statePred[DIM_FILTER] = {0};
 	float diffStatePlus[DIM_FILTER][DIM_FILTER] = {0};
 	float diffStateMinus[DIM_FILTER][DIM_FILTER] = {0};
 
@@ -614,26 +581,12 @@ static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, 
 		}
 	}
 
-  //  for(ii=0; ii<DIM_FILTER; ii++){
-	// 	//statePred[ii]  = w0*state0[ii];
-	// 	xEst[ii]  = w0*state0[ii];
-	// 	for(jj=0; jj<DIM_FILTER; jj++){
-	// 		//statePred[ii]  = statePred[ii]  + w1*sigmaPointsPlus[ii][jj];
-	// 		//statePred[ii]  = statePred[ii]  + w1*sigmaPointsMinus[ii][jj];
-	// 		xEst[ii] = xEst[ii] + w1*sigmaPointsPlus[ii][jj];
-	// 		xEst[ii] = xEst[ii] + w1*sigmaPointsMinus[ii][jj];
-	// 	}
-  // }
 	// compute mean from sigma points ( xEst[ii] )
 	computeMeanFromSigmaPoints();
 
 	//covMatPr = w0*(state0-statePr)*(state0-statePr)';
 	for(ii=0; ii<DIM_FILTER; ii++){
 		for(jj=0; jj<DIM_FILTER; jj++){
-			//covNew[ii][jj] = w0*(state0[ii]-statePred[ii])*(state0[jj]-statePred[jj]);
-   		//diffStatePlus[ii][jj]     = sigmaPointsPlus[ii][jj]-statePred[ii];
-			//diffStateMinus[ii][jj]    = sigmaPointsMinus[ii][jj]-statePred[ii];
-
 			covNew[ii][jj] = w0*(state0[ii]-xEst[ii])*(state0[jj]-xEst[jj]);
 			diffStatePlus[ii][jj]     = sigmaPointsPlus[ii][jj]-xEst[ii];
 			diffStateMinus[ii][jj]    = sigmaPointsMinus[ii][jj]-xEst[ii];
@@ -648,23 +601,6 @@ static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, 
 			}
 		}
   }
-
-	// float preFactor_h = 0.5f*procA_h*dt*dt*dt;
-	// float preFactor_z = 0.5f*procA_z*dt*dt*dt;
-
-  // covNew[0][0] += preFactor_h*(dcmTp[0][0]*dcmTp[0][0]+dcmTp[0][1]*dcmTp[0][1])+preFactor_z*(dcmTp[0][2]*dcmTp[0][2]);
-  // covNew[1][1] += preFactor_h*(dcmTp[1][0]*dcmTp[1][0]+dcmTp[1][1]*dcmTp[1][1])+preFactor_z*(dcmTp[1][2]*dcmTp[1][2]);
-	// covNew[2][2] += preFactor_h*(dcmTp[2][0]*dcmTp[2][0]+dcmTp[2][1]*dcmTp[2][1])+preFactor_z*(dcmTp[2][2]*dcmTp[2][2]);
-
-  // covNew[0][1] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+preFactor_z*(dcmTp[0][2]*dcmTp[1][2]);
-	// covNew[1][0] += preFactor_h*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+preFactor_z*(dcmTp[0][2]*dcmTp[1][2]);
-
-  // covNew[0][2] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1])+preFactor_z*(dcmTp[0][2]*dcmTp[2][2]);
-	// covNew[2][0] += preFactor_h*(dcmTp[0][0]*dcmTp[2][0]+dcmTp[0][1]*dcmTp[2][1])+preFactor_z*(dcmTp[0][2]*dcmTp[2][2]);
-
-	// covNew[1][2] += preFactor_h*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1])+preFactor_z*(dcmTp[1][2]*dcmTp[2][2]);
-	// covNew[2][1] += preFactor_h*(dcmTp[1][0]*dcmTp[2][0]+dcmTp[1][1]*dcmTp[2][1])+preFactor_z*(dcmTp[1][2]*dcmTp[2][2]);
-
 
 	covNew[3][4] += procA_h*dt*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+procA_z*dt*dcmTp[0][2]*dcmTp[1][2];
 	covNew[4][3] += procA_h*dt*(dcmTp[0][0]*dcmTp[1][0]+dcmTp[0][1]*dcmTp[1][1])+procA_z*dt*dcmTp[0][2]*dcmTp[1][2];
@@ -690,13 +626,11 @@ static void predictNavigationFilter(float *stateNav, Axis3f *acc, Axis3f *gyro, 
 static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage) {
 	uint8_t ii, jj, kk;
 	
-
 	float covNew[DIM_FILTER][DIM_FILTER];
 	float Pyy = 0.0f;
 	float Pxy[DIM_FILTER] = {0};
 	float Kk[DIM_FILTER] = {0};
 	float KkRKkTp[DIM_FILTER][DIM_FILTER] = {0};
-	//float Ptmp[DIM_FILTER][DIM_FILTER] = {0.0f};
 
 	float observation = 0;
 	float outTmp, tmpSigmaVecPlus[DIM_FILTER], tmpSigmaVecMinus[DIM_FILTER];
@@ -713,7 +647,6 @@ static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage) {
       gyroAccumulator.z += m.data.gyroscope.gyro.z;
       gyroLatest = m.data.gyroscope.gyro;
       gyroAccumulatorCount++;
-		  //return doneUpdate;
 		}
 		if(m.type==MeasurementTypeAcceleration){
       accAccumulator.x += m.data.acceleration.acc.x;
@@ -721,7 +654,6 @@ static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage) {
       accAccumulator.z += m.data.acceleration.acc.z;
       accLatest = m.data.acceleration.acc;
       accAccumulatorCount++;
-		  //return doneUpdate;
 		}
 
 		for(ii=0; ii<DIM_FILTER; ii++){
@@ -1220,8 +1152,6 @@ static void computeMeanFromSigmaPoints(void){
 
 static void computeSigmaPoints(void ){
 	uint8_t ii, jj;// kk;
-	//float scale = sqrtf((float)DIM_FILTER+KAPPA_UKF);
-	//float scale = 3.0f; // sqrtf((float)DIM_FILTER+KAPPA_UKF);
 	float L[DIM_FILTER][DIM_FILTER] = {0};
 
 	cholesky(&covNavFilter[0][0], &L[0][0] ,  DIM_FILTER); 
