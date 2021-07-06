@@ -30,6 +30,7 @@ typedef struct pathContolData_s {
 	bool initFlag;    // path controller flag whether last WP reached yet
 
 	float timePath;
+	float accTime;
 	float speedVec[3];
 	float waypoint1[3];
 	float waypoint2[3];

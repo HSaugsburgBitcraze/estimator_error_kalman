@@ -24,6 +24,9 @@ static float yHigh  =  1.2f;
 static float zLow   =  1.0f;
 static float zHigh  =  1.0f;
 static float speed  =  0.5f;
+static float accDist = 0.5f;
+static float refPos[3] = {0};
+static float currSpeed = 0.0f;
 
 //static bool isInit;
 //static bool isInitPlanner;
@@ -62,7 +65,20 @@ void initPathController(state_t *state, pathControlData_t* pathControlData, path
 
   float distance = euclidianDistance(&pathControlData->waypoint1[0], &pathControlData->waypoint2[0]);
 
-	deltaTSegment = distance/speed;
+	refPos[0] = pathControlData->waypoint1[0];
+	refPos[1] = pathControlData->waypoint1[1];
+	refPos[2] = pathControlData->waypoint1[2];
+
+	//deltaTSegment = distance/speed;
+	if(distance>=2.0f*accDist){
+		deltaTSegment = (2.0f*accDist+distance)/speed;
+		pathControlData->accTime = 2.0f*accDist/speed;
+	}
+	else{
+		float acc = speed*speed/(2.0f*accDist);
+	  deltaTSegment = sqrt(4.0f*distance/acc); 
+		pathControlData->accTime = 0.5f*deltaTSegment;
+	}
 
 	// set path control settings to initial value
 	pathControlData->timePath = 0.0f;
@@ -70,10 +86,13 @@ void initPathController(state_t *state, pathControlData_t* pathControlData, path
 	//pathControlData->finishFlag    = false;
 	//pathControlData->pathRedImproveCounter = 0;
 
-	// compute path speed information for the first segment
-	pathControlData->speedVec[0] = (pathControlData->waypoint2[0] - pathControlData->waypoint1[0]) / deltaTSegment;
-	pathControlData->speedVec[1] = (pathControlData->waypoint2[1] - pathControlData->waypoint1[1]) / deltaTSegment;
-	pathControlData->speedVec[2] = (pathControlData->waypoint2[2] - pathControlData->waypoint1[2]) / deltaTSegment;
+	// compute full path speed information for the first segment
+	//pathControlData->speedVec[0] = (pathControlData->waypoint2[0] - pathControlData->waypoint1[0]) / deltaTSegment;
+	//pathControlData->speedVec[1] = (pathControlData->waypoint2[1] - pathControlData->waypoint1[1]) / deltaTSegment;
+	//pathControlData->speedVec[2] = (pathControlData->waypoint2[2] - pathControlData->waypoint1[2]) / deltaTSegment;
+	pathControlData->speedVec[0] = (pathControlData->waypoint2[0] - pathControlData->waypoint1[0]) / distance;
+	pathControlData->speedVec[1] = (pathControlData->waypoint2[1] - pathControlData->waypoint1[1]) / distance;
+	pathControlData->speedVec[2] = (pathControlData->waypoint2[2] - pathControlData->waypoint1[2]) / distance;
 
   pathControlData->pathTimeNext = deltaTSegment;  
 }
@@ -82,7 +101,8 @@ void initPathController(state_t *state, pathControlData_t* pathControlData, path
 
 void pathController(setpoint_t *setpoint, state_t *state, pathPacket_t *pathPacket, pathControlData_t *pathControlData, float deltaT) {
 
-	float refPos[3];// , deltaTime;
+	//float refPos[3];// , deltaTime;
+	float acc = speed*speed/(2.0f*accDist);
 
 	pathControlData->timePath = pathControlData->timePath + deltaT;
 
@@ -111,18 +131,51 @@ void pathController(setpoint_t *setpoint, state_t *state, pathPacket_t *pathPack
 
     pathControlData->timePath = 0.0f;
 
-    float deltaTSegment = euclidianDistance(&pathControlData->waypoint1[0], &pathControlData->waypoint2[0])/speed;
-    pathControlData->pathTimeNext = deltaTSegment;
+		refPos[0] = pathControlData->waypoint1[0];
+		refPos[1] = pathControlData->waypoint1[1];
+		refPos[2] = pathControlData->waypoint1[2];
 
-    pathControlData->speedVec[0] = (pathControlData->waypoint2[0] - pathControlData->waypoint1[0]) / deltaTSegment;
-	  pathControlData->speedVec[1] = (pathControlData->waypoint2[1] - pathControlData->waypoint1[1]) / deltaTSegment;
-	  pathControlData->speedVec[2] = (pathControlData->waypoint2[2] - pathControlData->waypoint1[2]) / deltaTSegment;
+    float distance = euclidianDistance(&pathControlData->waypoint1[0], &pathControlData->waypoint2[0]);
+    if(distance>=2.0f*accDist){
+			pathControlData->pathTimeNext  = (2.0f*accDist+distance)/speed;
+			pathControlData->accTime = 2.0f*accDist/speed;
+		}
+		else{
+			float acc = speed*speed/(2.0f*accDist);
+			pathControlData->pathTimeNext  = sqrt(4.0f*distance/acc); 
+			pathControlData->accTime = 0.5f*pathControlData->pathTimeNext;
+		}
+		//pathControlData->pathTimeNext = deltaTSegment;
+
+		//pathControlData->speedVec[0] = (pathControlData->waypoint2[0] - pathControlData->waypoint1[0]) / deltaTSegment;
+		//pathControlData->speedVec[1] = (pathControlData->waypoint2[1] - pathControlData->waypoint1[1]) / deltaTSegment;
+		//pathControlData->speedVec[2] = (pathControlData->waypoint2[2] - pathControlData->waypoint1[2]) / deltaTSegment;
+		pathControlData->speedVec[0] = (pathControlData->waypoint2[0] - pathControlData->waypoint1[0]) / distance;
+		pathControlData->speedVec[1] = (pathControlData->waypoint2[1] - pathControlData->waypoint1[1]) / distance;
+		pathControlData->speedVec[2] = (pathControlData->waypoint2[2] - pathControlData->waypoint1[2]) / distance;
+
+		currSpeed = 0.0f;
 	}
 
+	
+	if(pathControlData->timePath<=pathControlData->accTime){
+		// accelerate
+		currSpeed = currSpeed + acc*deltaT;
+	}
+	else if(pathControlData->timePath>=(pathControlData->pathTimeNext-pathControlData->accTime)){
+		//de-accelerate
+		currSpeed = currSpeed - acc*deltaT;
+	}
+	// else{
+	// 	// constant speed
+	// 	currSpeed = speed;
+	// }
+
+
 	// compute reference position for path control
-	refPos[0] = pathControlData->speedVec[0] * pathControlData->timePath + pathControlData->waypoint1[0];
-	refPos[1] = pathControlData->speedVec[1] * pathControlData->timePath + pathControlData->waypoint1[1];
-	refPos[2] = pathControlData->speedVec[2] * pathControlData->timePath + pathControlData->waypoint1[2];
+	refPos[0] = refPos[0] + pathControlData->speedVec[0] *currSpeed*deltaT;
+	refPos[1] = refPos[1] + pathControlData->speedVec[1] *currSpeed*deltaT;
+	refPos[2] = refPos[2] + pathControlData->speedVec[2] *currSpeed*deltaT;
 	
 	// sum up formation controller
 	setpoint->mode.x = modeVelocity;
@@ -130,9 +183,9 @@ void pathController(setpoint_t *setpoint, state_t *state, pathPacket_t *pathPack
 	setpoint->mode.z = modeVelocity;
 
 	// compute control output
-	setpoint->velocity.x = pathControlData->speedVec[0] + path_Kp * (refPos[0] - state->position.x);
-	setpoint->velocity.y = pathControlData->speedVec[1] + path_Kp * (refPos[1] - state->position.y);
-	setpoint->velocity.z = pathControlData->speedVec[2] + path_Kp * (refPos[2] - state->position.z);
+	setpoint->velocity.x = pathControlData->speedVec[0]*currSpeed*deltaT + path_Kp * (refPos[0] - state->position.x);
+	setpoint->velocity.y = pathControlData->speedVec[1]*currSpeed*deltaT + path_Kp * (refPos[1] - state->position.y);
+	setpoint->velocity.z = pathControlData->speedVec[2]*currSpeed*deltaT + path_Kp * (refPos[2] - state->position.z);
 
 	setpoint->mode.yaw = modeVelocity;
 
@@ -160,4 +213,5 @@ PARAM_ADD_CORE(PARAM_FLOAT, yHigh, &yHigh)
 PARAM_ADD_CORE(PARAM_FLOAT, zHigh, &zHigh)
 PARAM_ADD_CORE(PARAM_FLOAT, path_Kp, &path_Kp)
 PARAM_ADD_CORE(PARAM_FLOAT, speed, &speed)
+PARAM_ADD_CORE(PARAM_FLOAT, accDist, &accDist)
 PARAM_GROUP_STOP(pathCtr)
