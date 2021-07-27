@@ -96,7 +96,7 @@ static STATS_CNT_RATE_DEFINE(measurementNotAppendedCounter, ONE_SECOND);
 
 static float scaleSigma = 3.674f;
 static float w0    = 0.333f;
-static float w1    = 0.03703;
+static float w1    = 0.03704;
 
 
 static float stateNav[DIM_STRAPDOWN];
@@ -107,7 +107,6 @@ static Axis3f omegaBias;
 static float baroAslBias;
 
 static float covNavFilter[DIM_FILTER][DIM_FILTER];
-//static arm_matrix_instance_f32 covNavFilter_Mat = {DIM_FILTER, DIM_FILTER, (float *)covNavFilter};  // obsolute?
 
 static float xEst[DIM_FILTER];
 static float sigmaPointsPlus[DIM_FILTER][DIM_FILTER] = {0};
@@ -117,29 +116,31 @@ static float state0[DIM_FILTER] = {0};
 static float accNed[3];
 static float dcm[3][3],dcmTp[3][3];
 
+
 static float stdDevInitialPosition_xy = 50.0f;// 50.0f;// were static const
-static float stdDevInitialPosition_z  = 0.5f; //50.0f;// were static const
+static float stdDevInitialPosition_z  = 1.0f; //50.0f;// were static const
 static float stdDevInitialVelocity    = 0.0001f;// were static const
 static float stdDevInitialAtt         = 0.01f;  // were static const
 
+// these parameters are for CF2.1 only! 
 // variances of process noise (accelerometer and gyroscope noise)
 static float procA_h    = 4.4755e-6f; //0.05059f*0.05059f;// 0.1f*0.1f;
-static float procA_z    = 8.5343e-6f; //0.05059f*0.05059f;//0.1f*0.1f;
+static float procA_z    = 0.00013655f; // 8.5343e-6f; //0.05059f*0.05059f;//0.1f*0.1f;
 static float procVel_h  = 0.00f;
 static float procVel_z  = 0.00f;
 static float procRate_h = 9.2495e-7f; //0.0007f*0.0007f; //0.1f*0.1f;
 static float procRate_z = 2.3124e-7f; //0.0007f*0.0007f; // 0.1f*0.1f;
 
 // measurement noise baro - variance
-static float measNoiseBaro = 0.7f*0.7f;
+static float measNoiseBaro = 6.25;//0.7f*0.7f;
 
 // quality gates
 //static float qualGateTof  = 100.63f; // for CF 2.0
-static float qualGateTof  = 100.63f; // for CF 2.1
+static float qualGateTof  = 1000.63f; // for CF 2.1
 static float qualGateFlow = 1000.63f;
 
 static float qualGateTdoa = 1000.63f; // should not be lowered currently
-static float qualGateBaro = 1.64f;
+static float qualGateBaro = 3.64f;  // was 1.64
 
 //static bool activateFlowDeck = true;
 static uint32_t nanCounterFilter = 0;
