@@ -523,7 +523,13 @@ LOG_ADD(LOG_UINT32, intToOut, &inToOutLatency)
 LOG_GROUP_STOP(stabilizer)
 
 /**
- * Log group for accelerometer data
+ * Log group for accelerometer sensor measurement, based on body frame.
+ * Compensated for a miss-alignment by gravity at startup.
+ *
+ * For data on measurement noise please see information from the sensor
+ * manufacturer. To see what accelerometer sensor is in your Crazyflie or Bolt
+ * please check documentation on the Bitcraze webpage or check the parameter
+ * group `imu_sensors`.
  */
 LOG_GROUP_START(acc)
 
@@ -552,7 +558,12 @@ LOG_GROUP_STOP(accSec)
 #endif
 
 /**
- * Log group for the barometer
+ * Log group for the barometer.
+ *
+ * For data on measurement noise please see information from the sensor
+ * manufacturer. To see what barometer sensor is in your Crazyflie or Bolt
+ * please check documentation on the Bitcraze webpage or check the parameter
+ * group `imu_sensors`.
  */
 LOG_GROUP_START(baro)
 
@@ -574,6 +585,11 @@ LOG_GROUP_STOP(baro)
 
 /**
  * Log group for gyroscopes.
+ *
+ * For data on measurement noise please see information from the sensor
+ * manufacturer. To see what gyroscope sensor is in your Crazyflie or Bolt
+ * please check documentation on the Bitcraze webpage or check the parameter
+ * group `imu_sensors`.
  */
 LOG_GROUP_START(gyro)
 
