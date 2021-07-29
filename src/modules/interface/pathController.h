@@ -6,7 +6,7 @@
 #include "crtp_commander.h"
 
 #define MAX_PATH_LENGTH 4
-#define RATE_PATH_CTRL RATE_25_HZ
+#define RATE_PATH_CTRL RATE_50_HZ
 
 ///** path Data */
 typedef struct pathPacket_s {
