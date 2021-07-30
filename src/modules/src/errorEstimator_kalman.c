@@ -138,9 +138,11 @@ static float measNoiseBaro = 6.25;//0.7f*0.7f;
 //static float qualGateTof  = 100.63f; // for CF 2.0
 static float qualGateTof  = 1000.63f; // for CF 2.1
 static float qualGateFlow = 1000.63f;
-
 static float qualGateTdoa = 1000.63f; // should not be lowered currently
 static float qualGateBaro = 3.64f;  // was 1.64
+
+//static float qualGateSweep = 1000.63f;
+//static OutlierFilterLhState_t sweepOutlierFilterState;
 
 //static bool activateFlowDeck = true;
 static uint32_t nanCounterFilter = 0;
@@ -178,6 +180,8 @@ static void computeOutputFlow_x(float *output, float* state, flowMeasurement_t *
 static void computeOutputFlow_y(float *output, float* state, flowMeasurement_t *flow, Axis3f *omegaBody);
 static void computeOutputTdoa(float *output, float* state,tdoaMeasurement_t *tdoa);
 static void computeOutputBaro(float *output, float* state);
+
+//static void computeOutputSweep(float *output, float* state, sweepAngleMeasurement_t *sweepInfo, float *xy);
 
 static bool ukfUpdate(float* Pxy, float* Pyy, float innovation);
 //static void computeMeanFromSigmaPoints(void);
@@ -1076,6 +1080,63 @@ static bool updateQueuedMeasurements(const uint32_t tick, Axis3f* gyroAverage) {
 					// }	
 				}
         break;
+
+				// case MeasurementTypeSweepAngle:
+				// 	float xy[2];
+				// 	computeOutputSweep( &outTmp, &state0[0],&m.data.sweepAngle, &xy[0]);
+				// 	const float r = arm_sqrt(xy[0] * xy[0] + xy[1] * xy[1]);
+					
+				// 	observation = w0*outTmp;
+				// 	for(jj=0; jj<DIM_FILTER; jj++){
+				// 		for(ii=0; ii<DIM_FILTER; ii++){
+				// 			tmpSigmaVecPlus[ii]  = sigmaPointsPlus[ii][jj];
+				// 			tmpSigmaVecMinus[ii] = sigmaPointsMinus[ii][jj];
+				// 		}
+				// 		computeOutputSweep( &outTmp, &tmpSigmaVecPlus[0],&m.data.sweepAngle,&xy[0]);
+				// 		observation = observation + w1*outTmp;
+				// 		computeOutputSweep( &outTmp, &tmpSigmaVecMinus[0],&m.data.sweepAngle,&xy[0]);
+				// 		observation = observation + w1*outTmp;
+				// 	}
+				// 	computeOutputSweep( &outTmp, &state0[0], &m.data.sweepAngle, &xy[0]);
+				// 	Pyy =  w0*(outTmp-observation)*(outTmp-observation);
+				// 	// xEst and state0 are zero so no contribution for w0 weighted terms
+				// 	for(jj=0; jj<DIM_FILTER; jj++){
+				// 	 	Pxy[jj]=0.0f;//w0*(state0[jj]-xEst[jj])*(outTmp-observation);
+				// 	}
+
+				// 	for(jj=0; jj<DIM_FILTER; jj++){
+				// 		for(ii=0; ii<DIM_FILTER; ii++){
+				// 			tmpSigmaVecPlus[ii]  = sigmaPointsPlus[ii][jj];
+				// 			tmpSigmaVecMinus[ii] = sigmaPointsMinus[ii][jj];
+				// 		}
+				// 		computeOutputSweep( &outTmp, &tmpSigmaVecPlus[0], &m.data.sweepAngle, &xy[0]);
+				// 		Pyy = Pyy + w1*( outTmp-observation)*( outTmp-observation);
+								
+				// 		for(kk=0; kk<DIM_FILTER; kk++){
+				// 			Pxy[kk] = Pxy[kk] + w1*(tmpSigmaVecPlus[kk]-xEst[kk])*(outTmp-observation);
+				// 		}
+
+				// 		computeOutputSweep( &outTmp, &tmpSigmaVecMinus[0], &m.data.sweepAngle, &xy[0]);
+				// 		Pyy = Pyy + w1*( outTmp-observation)*( outTmp-observation);
+
+				// 		for(kk=0; kk<DIM_FILTER; kk++){
+				// 			Pxy[kk] = Pxy[kk] + w1*(tmpSigmaVecMinus[kk]-xEst[kk])*(outTmp-observation);
+				// 		}
+				// 	}
+				// 		// Add TDOA Noise R
+				// 	Pyy = Pyy + m.data.sweepAngle.stdDev*m.data.sweepAngle.stdDev;
+				// 	innovation = m.data.sweepAngle.measuredSweepAngle-observation;
+					
+					
+				// 	innoCheck = innovation *innovation/Pyy;
+				// 	if(outlierFilterValidateLighthouseSweep(&sweepOutlierFilterState, r, innovation, tick)){
+				// 		if(innoCheck<qualGateTdoa){	
+				// 			 ukfUpdate(&Pxy[0], &Pyy, innovation);
+				// 		}
+				// 	}
+
+				// break;
+
       default:
          break;
 		}
@@ -1151,19 +1212,41 @@ static void computeOutputTdoa(float *output, float* state, tdoaMeasurement_t *td
      output[0]  = d1 - d0;
 }
 
-// static void computeMeanFromSigmaPoints(void){
-// 	uint8_t ii, jj;
-// 	for(ii=0; ii<DIM_FILTER; ii++){
-// 		//statePred[ii]  = w0*state0[ii];
-// 		xEst[ii]  = 0.0f;// TODO CHECK w0*state0[ii];
-// 		for(jj=0; jj<DIM_FILTER; jj++){
-// 			//statePred[ii]  = statePred[ii]  + w1*sigmaPointsPlus[ii][jj];
-// 			//statePred[ii]  = statePred[ii]  + w1*sigmaPointsMinus[ii][jj];
-// 			xEst[ii] = xEst[ii] + w1*sigmaPointsPlus[ii][jj];
-// 			xEst[ii] = xEst[ii] + w1*sigmaPointsMinus[ii][jj];
-// 		}
-//   }
+// static void computeOutputSweep(float *output, float* state, sweepAngleMeasurement_t *sweepInfo, float *xy){
+// 		float posSensor[3];
+// 		//	m.data.sweepAngle
+// 		// Rotate the sensor position from CF reference frame to global reference frame,
+// 		// using the CF roatation matrix
+// 		posSensor[0] = dcmTp[0][0]*(*sweepInfo->sensorPos[0])+dcmTp[0][1]*(*sweepInfo->sensorPos[1])+dcmTp[0][2]*(*sweepInfo->sensorPos[2]);
+// 		posSensor[1] = dcmTp[1][0]*(*sweepInfo->sensorPos[0])+dcmTp[1][1]*(*sweepInfo->sensorPos[1])+dcmTp[1][2]*(*sweepInfo->sensorPos[2]);
+// 		posSensor[2] = dcmTp[2][0]*(*sweepInfo->sensorPos[0])+dcmTp[2][1]*(*sweepInfo->sensorPos[1])+dcmTp[2][2]*(*sweepInfo->sensorPos[2]);
+
+// 		// Get the current state values of the position of the crazyflie (global reference frame) and add the relative sensor pos
+// 		vec3d pcf = {stateNav[0]+state[0] + posSensor[0], stateNav[1]+state[1] + posSensor[1], stateNav[2]+state[2] + posSensor[2]};
+							
+// 		// Calculate the difference between the rotor and the sensor on the CF (global reference frame)
+// 		pcf[0] = pcf[0]-(*sweepInfo->rotorPos[0]);
+// 		pcf[1] = pcf[1]-(*sweepInfo->rotorPos[1]);
+// 		pcf[2] = pcf[2]-(*sweepInfo->rotorPos[2]);
+
+// 		arm_matrix_instance_f32 pcf_ = {3, 1, pcf};				
+// 	  // Rotate the difference in position to the rotor reference frame,
+// 		// using the rotor inverse rotation matrix
+// 		vec3d sr;
+// 		arm_matrix_instance_f32 Rr_inv_ = {3, 3, (float32_t *)(*sweepInfo->rotorRotInv)};
+// 		arm_matrix_instance_f32 sr_ = {3, 1, sr};
+// 		mat_mult(&Rr_inv_, &pcf_, &sr_);
+
+// 		// The following computations are in the rotor reference frame
+// 		const float t = sweepInfo->t;
+// 		const float tan_t = tanf(t);
+
+// 		xy[0] = sr[0];
+// 		xy[1] = sr[1];
+// 		output[0] = sweepInfo->calibrationMeasurementModel(sr[0], sr[1], sr[2], t, sweepInfo->calib);					
 // }
+
+
 
 
 static void computeSigmaPoints(void ){
