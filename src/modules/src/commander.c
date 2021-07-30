@@ -33,6 +33,8 @@
 #include "crtp_commander.h"
 #include "crtp_commander_high_level.h"
 
+#include "land.h"
+
 #include "cf_math.h"
 #include "param.h"
 #include "static_mem.h"
@@ -45,6 +47,7 @@ const static int priorityDisable = COMMANDER_PRIORITY_DISABLE;
 
 static uint32_t lastUpdate;
 static bool enableHighLevel = false;
+static bool enableLand = false;
 
 static QueueHandle_t setpointQueue;
 STATIC_MEM_QUEUE_ALLOC(setpointQueue, 1, sizeof(setpoint_t));
@@ -106,7 +109,9 @@ void commanderGetSetpoint(setpoint_t *setpoint, const state_t *state)
   lastUpdate = setpoint->timestamp;
   uint32_t currentTime = xTaskGetTickCount();
 
-  if ((currentTime - setpoint->timestamp) > COMMANDER_WDT_TIMEOUT_SHUTDOWN) {
+  if (enableLand) {
+    landGetSetpoint(setpoint, state);
+  } else if ((currentTime - setpoint->timestamp) > COMMANDER_WDT_TIMEOUT_SHUTDOWN) {
     if (enableHighLevel) {
       crtpCommanderHighLevelGetSetpoint(setpoint, state);
     }
@@ -176,5 +181,6 @@ PARAM_GROUP_START(commander)
  *  @brief Enable high level commander
  */
 PARAM_ADD_CORE(PARAM_UINT8, enHighLevel, &enableHighLevel)
+PARAM_ADD(PARAM_UINT8, enLand, &enableLand)
 
 PARAM_GROUP_STOP(commander)
