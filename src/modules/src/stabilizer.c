@@ -59,6 +59,7 @@
 
 static bool isInit;
 static bool emergencyStop = false;
+static bool resetTumbleFlag = false;
 static int emergencyStopTimeout = EMERGENCY_STOP_TIMEOUT_DISABLED;
 
 static uint32_t inToOutLatency;
@@ -119,6 +120,9 @@ static struct {
   int16_t ay;
   int16_t az;
 } setpointCompressed;
+
+// static bool resetTumbleAndStop = false;
+void resetStopAndTumble();
 
 STATIC_MEM_TASK_ALLOC(stabilizerTask, STABILIZER_TASK_STACKSIZE);
 
@@ -243,6 +247,10 @@ static void stabilizerTask(void* param)
   DEBUG_PRINT("Ready to fly.\n");
 
   while(1) {
+    if(resetTumbleFlag) {
+      resetStopAndTumble();
+      paramSetInt(paramGetVarId("stabilizer", "resetTumbleNow"), 0);
+    }
     // The sensor should unlock at 1kHz
     sensorsWaitDataReady();
 
@@ -342,6 +350,12 @@ void stabilizerSetEmergencyStopTimeout(int timeout)
   emergencyStopTimeout = timeout;
 }
 
+void resetStopAndTumble() {
+    stabilizerResetEmergencyStop();
+    resetTumble();
+    DEBUG_PRINT("Resetting emergency stop and tumble!\n");
+}
+
 /**
  * Parameters to set the estimator and controller type
  * for the stabilizer module, or to do an emergency stop
@@ -360,6 +374,7 @@ PARAM_ADD_CORE(PARAM_UINT8, controller, &controllerType)
  */
 PARAM_ADD_CORE(PARAM_UINT8, stop, &emergencyStop)
 PARAM_ADD_CORE(PARAM_UINT8, pathCtrMode, &pathCtrMode)
+PARAM_ADD_CORE(PARAM_UINT8, resetTumbleNow, &resetTumbleFlag)
 PARAM_GROUP_STOP(stabilizer)
 
 
