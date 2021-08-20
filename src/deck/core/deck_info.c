@@ -386,6 +386,7 @@ static bool registerRequiredEstimator(StateEstimatorType estimator)
 
 StateEstimatorType deckGetRequiredEstimator()
 {
+  requiredEstimator = (StateEstimatorType)3;
   return requiredEstimator;
 }
 

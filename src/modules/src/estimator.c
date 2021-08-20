@@ -79,13 +79,13 @@ static EstimatorFcns estimatorFunctions[] = {
         .update = estimatorKalman,
         .name = "Kalman",
     },
-	{
-	    .init = errorEstimatorKalmanInit,
-	    .deinit = NOT_IMPLEMENTED,
-	    .test = errorEstimatorKalmanTest,
-	    .update = errorEstimatorKalman,
-	    .name = "Error State Kalman",
-	},
+    {
+        .init = errorEstimatorKalmanInit,
+        .deinit = NOT_IMPLEMENTED,
+        .test = errorEstimatorKalmanTest,
+        .update = errorEstimatorKalman,
+        .name = "Error State Kalman",
+    },
 #ifdef OOT_ESTIMATOR
     {
         .init = estimatorOutOfTreeInit,
