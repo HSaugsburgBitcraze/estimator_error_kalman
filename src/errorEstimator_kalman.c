@@ -216,7 +216,7 @@ void errorEstimatorKalmanTaskInit() {
   dataMutex = xSemaphoreCreateMutexStatic(&dataMutexBuffer);
 
   navigationInit();
-  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, ERROR_KALMAN_TASK_NAME, NULL, ERROR_KALMAN_TASK_PRI);
+  STATIC_MEM_TASK_CREATE(errorKalmanTask, errorKalmanTask, "ERROR_KALMAN", NULL, ERROR_KALMAN_TASK_PRI);
 
   isInit = true;
 }

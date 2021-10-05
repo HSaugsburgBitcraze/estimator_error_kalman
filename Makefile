@@ -18,7 +18,6 @@ VPATH += src/
 PROJ_OBJ += errorEstimator_kalman.o app_error_kalman.o
 
 CFLAGS += -DERROR_KALMAN_TASK_PRI=5
-CFLAGS += -DERROR_KALMAN_TASK_NAME="ERROR_KALMAN"
 
 CRAZYFLIE_BASE=crazyflie-firmware
 include $(CRAZYFLIE_BASE)/Makefile
