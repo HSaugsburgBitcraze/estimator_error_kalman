@@ -15,9 +15,9 @@ APP=1
 APP_STACKSIZE=300
 
 VPATH += src/
-PROJ_OBJ += estimator_error_kalman.o app_error_kalman.o
+PROJ_OBJ += errorEstimator_kalman.o app_error_kalman.o
 
-CFLAGS += -DERROR_KALMAN_TASK_PRI=2
+CFLAGS += -DERROR_KALMAN_TASK_PRI=5
 CFLAGS += -DERROR_KALMAN_TASK_NAME="ERROR_KALMAN"
 
 CRAZYFLIE_BASE=crazyflie-firmware
