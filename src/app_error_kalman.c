@@ -50,9 +50,9 @@ void appMain()
     DEBUG_PRINT("Initalizing Error Kalman Filter\n");
     errorEstimatorKalmanTaskInit();
 
-  while(1) {
+  while(1) 
+  {
     vTaskDelay(M2T(2000));
-    DEBUG_PRINT("Hello World!\n");
   }
 }
 
