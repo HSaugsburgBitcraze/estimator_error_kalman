@@ -24,6 +24,8 @@ To leave the mode just set stabilizer.pathCtrMode=0, you should do this before u
 Building and Flashing
 
 For building and flashing see common bitcraze advices. See the building and flashing instructions in the github docs folder.
+
+
 License
 
 The code is licensed under LGPL-3.0
