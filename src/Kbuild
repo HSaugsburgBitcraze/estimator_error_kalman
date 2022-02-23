@@ -1,0 +1,2 @@
+obj-y += app_error_kalman.o
+obj-y += errorEstimator_kalman.o
